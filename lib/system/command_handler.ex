@@ -12,6 +12,9 @@ defmodule Extreme.System.CommandHandler do
       defp spawn_new(id),
         do: AggregateGroup.spawn_new group_name, id
 
+      defp exists?(key),
+        do: event_store.has? {Keyword.fetch!(unquote(opts), :category), key}
+
       defp exec_on_aggregate(id, fun) do
         case get_pid(id) do
           {:ok, pid} -> case fun.(pid) do
