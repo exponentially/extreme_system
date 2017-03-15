@@ -5,6 +5,11 @@ defmodule Extreme.System.Mixfile do
     [app: :extreme_system,
      version: "0.0.1",
      elixir: "~> 1.3",
+     source_url: "https://github.com/exponentially/extreme_system",
+     description: """
+     Building blocks for distributed systems
+     """,
+     package: package(),
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
      deps: deps()]
@@ -22,6 +27,18 @@ defmodule Extreme.System.Mixfile do
     [
       {:extreme, "~> 0.7.1 or ~> 0.8.0"},
       {:amqp,    "~> 0.1.4 or ~> 0.2.0-pre.2"},
+      {:ex_doc, ">= 0.11.4", only: [:dev]},
+      {:earmark, ">= 0.0.0", only: [:dev]},
+      {:inch_ex, ">= 0.0.0", only: :docs},
+    ]
+  end
+
+  defp package do
+    [
+      files: ["lib", "mix.exs", "README*", "LICENSE*"],
+      maintainers: ["Milan Burmaja"],
+      licenses: ["MIT"],
+      links: %{"GitHub" => "https://github.com/exponentially/extreme_system"}
     ]
   end
 end
