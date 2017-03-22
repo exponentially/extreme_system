@@ -27,6 +27,16 @@ defmodule Extreme.System.EventStore do
 
       def stream_name({category, id}), do: "#{category}-#{id}"
 
+      unquote do
+        Keyword.fetch!(opts, :streams)
+        |> Enum.each(fn {aggregate_group, stream} ->
+             quote do
+               defp stream_name({unquote(aggregate_group), id}),
+                 do: String.replace unquote(stream), ":id", "#{id}"
+             end
+           end)
+      end
+
 
       ## Server Callbacks
 

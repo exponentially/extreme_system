@@ -15,9 +15,16 @@ defmodule Extreme.System.CommandsSupervisor do
 
       def init({extreme_settings}) do
         extreme_name = String.to_atom(@prefix <> ".ExtremeWrite")
+
+        groups = unquote(opts)
+                 |> Keyword.fetch!(:streams)
+                 |> Enum.map(fn {aggregate, stream} ->
+                      supervisor( Extreme.System.AggregateGroup, [aggregate, aggregate], id: aggregate)
+                    end)
         children = [
           worker(     Extreme,                            [extreme_settings, [name: extreme_name]], id: extreme_name),
-        ]
+          #worker(     Extreme.System.EventStore,          [extreme_name,     [name: es_name]]),
+        ] ++ groups
 
         supervise children, strategy: :one_for_one
       end

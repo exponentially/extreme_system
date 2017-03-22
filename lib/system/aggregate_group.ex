@@ -25,7 +25,7 @@ defmodule Extreme.System.AggregateGroup do
   end
 
 
-  defp group_name(group),    do: "#{group}.AggregateGroup"    |> String.to_atom
-  defp sup_name(group),      do: "#{group}.AggregateSup"      |> String.to_atom
-  defp registry_name(group), do: "#{group}.AggregateRegistry" |> String.to_atom
+  defp group_name(group),    do: "#{group}Group"    |> String.to_atom
+  defp sup_name(group),      do: "#{group}Sup"      |> String.to_atom
+  defp registry_name(group), do: "#{group}Registry" |> String.to_atom
 end

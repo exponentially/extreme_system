@@ -4,16 +4,14 @@ defmodule Extreme.System.CommandHandler do
       require Logger
       alias   Extreme.System.AggregateGroup
 
-      defp group_name,       do: Keyword.fetch! unquote(opts), :group
-      defp aggregate_module, do: Keyword.fetch! unquote(opts), :aggregate
-      defp event_store,      do: Keyword.fetch! unquote(opts), :event_store
-      defp stream_category,  do: Keyword.fetch! unquote(opts), :category
+      defp aggregate,    do: Keyword.fetch! unquote(opts), :aggregate
+      defp event_store,  do: Keyword.fetch! unquote(opts), :event_store
 
       defp spawn_new(id),
-        do: AggregateGroup.spawn_new group_name, id
+        do: AggregateGroup.spawn_new aggregate, id
 
       defp exists?(key),
-        do: event_store.has? {Keyword.fetch!(unquote(opts), :category), key}
+        do: event_store.has? {aggregate, key}
 
       defp exec_on_aggregate(id, fun) do
         case get_pid(id) do
@@ -29,19 +27,19 @@ defmodule Extreme.System.CommandHandler do
 
       ## get aggregate pid
       defp get_pid(key) do
-        case AggregateGroup.get_registered(group_name, key) do
-          :error     -> get_from_db(key)
+        case AggregateGroup.get_registered(aggregate, key) do
+          :error     -> get_from_es(key)
           {:ok, pid} -> {:ok, pid}
         end
       end
 
-      defp get_from_db(key) do
-        case event_store.has?({stream_category, key}) do
+      defp get_from_es(key) do
+        case event_store.has?({aggregate, key}) do
           true ->
-            events = event_store.stream_events {Keyword.fetch!(unquote(opts), :category), key}
+            events = event_store.stream_events {aggregate, key}
             Logger.debug "Applying events for existing tractor #{key}"
-            {:ok, pid} = AggregateGroup.spawn_new group_name, key
-            :ok        = aggregate_module.apply pid, events
+            {:ok, pid} = AggregateGroup.spawn_new aggregate, key
+            :ok        = aggregate.apply pid, events
             {:ok, pid}
           false ->
             Logger.warn "No events found for tractor: #{key}"
@@ -51,15 +49,15 @@ defmodule Extreme.System.CommandHandler do
 
 
       #apply_changes
-      defp apply_changes(aggregate, key, transaction, events) do
-        case event_store.save_events({Keyword.fetch!(unquote(opts), :category), key}, events, Logger.metadata) do
+      defp apply_changes(pid, key, transaction, events) do
+        case event_store.save_events({aggregate, key}, events, Logger.metadata) do
           {:ok, last_event_number} ->
-            :ok = aggregate_module.commit aggregate, transaction
+            :ok = aggregate.commit pid, transaction
             Logger.info "Successfull commit of events"
             {:ok, last_event_number}
           error ->
             Logger.error "Error saving events #{inspect error}"
-            Process.exit aggregate, :kill
+            Process.exit pid, :kill
         end
       end
     end
