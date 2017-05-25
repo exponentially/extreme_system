@@ -86,4 +86,10 @@ defmodule Extreme.System.FacadeTest do
     assert {:ok, _}        = GenServer.call @facade, {:rnd, 1}
     assert {:done, :cmd}   = GenServer.call @facade, {:cmd, 1}
   end
+
+  test "proxies request after cache is timeouted" do
+    assert {:ok, response}  = GenServer.call @facade, {:rnd, nil}
+    :timer.sleep 1_010
+    refute {:ok, response} == GenServer.call @facade, {:rnd, nil}
+  end
 end
