@@ -25,10 +25,10 @@ defmodule MyFacade do
   def on_init,
     do: Logger.info "Started MyFacade"
 
-  route :cmd,  MyMsgHandler
-  route :cmd2, {MyMsgHandler, :cmd}
-  route :long, MyMsgHandler
-  route :rnd,  MyMsgHandler
+  route :cmd,          MyMsgHandler
+  route :cmd2,         {MyMsgHandler, :cmd}
+  route :long,         MyMsgHandler
+  route :rnd,          MyMsgHandler
 end
 
 defmodule Extreme.System.FacadeTest do
@@ -38,7 +38,7 @@ defmodule Extreme.System.FacadeTest do
   @facade {:global, MyFacade}
 
   setup_all do
-    {:ok, _} = Extreme.System.FacadeSup.start_link MyFacade, @facade, cache_timeout: 1_000
+    {:ok, _} = Extreme.System.FacadeSup.start_link MyFacade, @facade, cache_ttl: 1_000
     :ok
   end
 
@@ -92,4 +92,7 @@ defmodule Extreme.System.FacadeTest do
     :timer.sleep 1_010
     refute {:ok, response} == GenServer.call @facade, {:rnd, nil}
   end
+
+  test "command can override caching time"
+  test "command can disable caching"
 end

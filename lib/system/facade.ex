@@ -97,9 +97,9 @@ defmodule Extreme.System.Facade do
               Logger.warn "We don't have cached callers for this request anymore"
             {:ok, %{callers: callers, response: :pending}} -> 
               respond_to callers, response
-              Logger.debug "Setting expiration time to #{inspect state.opts[:cache_timeout]}"
+              Logger.debug "Setting expiration time to #{inspect state.opts[:cache_ttl]}"
               Cachex.set! cache_state, hash, %{callers: [], response: response}
-              Cachex.expire cache_state, hash, state.opts[:cache_timeout]
+              Cachex.expire cache_state, hash, state.opts[:cache_ttl]
             other ->
               Logger.warn "WTF is #{inspect other} ?!"
           end

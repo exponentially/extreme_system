@@ -18,7 +18,7 @@ defmodule Extreme.System.Mixfile do
   def application do
     [
       applications: [
-        :logger, :extreme, :amqp
+        :logger, :extreme, :amqp, :cachex
       ]
     ]
   end
@@ -26,10 +26,12 @@ defmodule Extreme.System.Mixfile do
   defp deps do
     [
       {:extreme, "~> 0.7.1 or ~> 0.8.0"},
+      {:cachex, "~> 2.1"},
       {:amqp,    "~> 0.1.4 or ~> 0.2.0-pre.2"},
       {:ex_doc, ">= 0.11.4", only: [:dev]},
       {:earmark, ">= 0.0.0", only: [:dev]},
       {:inch_ex, ">= 0.0.0", only: :docs},
+      {:excoveralls, "~> 0.6", only: :test},
     ]
   end
 
