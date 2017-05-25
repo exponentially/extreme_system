@@ -29,26 +29,27 @@ defmodule Extreme.System.FacadeTest do
   use     ExUnit.Case
   require Logger
 
-  setup do
-    {:ok, _}      = Task.Supervisor.start_link name: :request_sup
-    {:ok, facade} = MyFacade.start_link :request_sup
-    {:ok, %{facade: facade}}
+  @facade {:global, MyFacade}
+
+  setup_all do
+    {:ok, _} = Extreme.System.FacadeSup.start_link MyFacade, @facade
+    :ok
   end
 
-  test "proxies message to handler's action with the same name", %{facade: facade} do
-    assert :ok = GenServer.call facade, {:cmd, 123}
+  test "proxies message to handler's action with the same name" do
+    assert :ok = GenServer.call @facade, {:cmd, 123}
   end
 
-  test "proxies message to handler's action with different name", %{facade: facade} do
-    assert :ok = GenServer.call facade, {:cmd2, "different call"}
+  test "proxies message to handler's action with different name" do
+    assert :ok = GenServer.call @facade, {:cmd2, "different call"}
   end
 
-  test "can handle concurrent requests", %{facade: facade} do
+  test "can handle concurrent requests" do
     spawn fn ->
-      assert :done = GenServer.call facade, {:long, "I shouldn't block other requests"}
+      assert :done = GenServer.call @facade, {:long, "I shouldn't block other requests"}
     end
     :timer.sleep 10
-    assert :ok = GenServer.call facade, {:cmd, 123}
+    assert :ok = GenServer.call @facade, {:cmd, 123}
     :timer.sleep 1_000
   end
 end
