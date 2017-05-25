@@ -13,7 +13,7 @@ defmodule MyMsgHandler do
     {:done, :long}
   end
 
-  def rnd(nil) do
+  def rnd(_) do
     {:ok, :rand.uniform}
   end
 end
@@ -75,5 +75,15 @@ defmodule Extreme.System.FacadeTest do
     end
     :timer.sleep 700
     assert {:done, :long} = GenServer.call @facade, {:long, "I shouldn't block other requests 2"}, 200
+  end
+
+  test "same commands with different params are not mixed in cache" do
+    assert {:ok, response}  = GenServer.call @facade, {:rnd, 1}
+    refute {:ok, response} == GenServer.call @facade, {:rnd, 2}
+  end
+
+  test "different commands with the same params are not mixed in cache" do
+    assert {:ok, _}        = GenServer.call @facade, {:rnd, 1}
+    assert {:done, :cmd}   = GenServer.call @facade, {:cmd, 1}
   end
 end
