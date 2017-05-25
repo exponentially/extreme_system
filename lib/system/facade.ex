@@ -38,33 +38,39 @@ defmodule Extreme.System.Facade do
 
   defmacro route(cmd, {controller, action}) do
     quote do
-	  def handle_call({unquote(cmd), params}, from, request_sup) do
-        execute(request_sup, from, fn ->
+	  def handle_call({unquote(cmd), params}, from, state) do
+        req_id = hash(unquote(cmd), params)
+        execute(state, req_id, from, fn ->
 	      unquote(controller).unquote(action)(params)
         end)
+	    {:noreply, state}
       end
-	  def handle_call({unquote(cmd), params, metadata}, from, request_sup) do
-        execute(request_sup, from, fn ->
+	  def handle_call({unquote(cmd), params, metadata}, from, state) do
+        req_id = hash(unquote(cmd), params)
+        execute(state, req_id, from, fn ->
           Logger.metadata metadata
 	      unquote(controller).unquote(action)(params)
         end)
-	    {:noreply, request_sup}
+	    {:noreply, state}
 	  end
     end
   end
   defmacro route(cmd, controller) do
     quote do
-	  def handle_call({unquote(cmd), params}, from, request_sup) do
-        execute(request_sup, from, fn ->
+	  def handle_call({unquote(cmd), params}, from, state) do
+        req_id = hash(unquote(cmd), params)
+        execute(state, req_id, from, fn ->
 	      unquote(controller).unquote(cmd)(params)
         end)
+	    {:noreply, state}
       end
-	  def handle_call({unquote(cmd), params, metadata}, from, request_sup) do
-        execute(request_sup, from, fn ->
+	  def handle_call({unquote(cmd), params, metadata}, from, state) do
+        req_id = hash(unquote(cmd), params)
+        execute(state, req_id, from, fn ->
           Logger.metadata metadata
 	      unquote(controller).unquote(cmd)(params)
         end)
-	    {:noreply, request_sup}
+	    {:noreply, state}
 	  end
     end
   end
@@ -76,23 +82,77 @@ defmodule Extreme.System.Facade do
       import  Extreme.System.Facade
       require Logger
 
-      def start_link(request_sup, opts \\ []), 
-        do: GenServer.start_link(__MODULE__, request_sup, opts)
+      def start_link(request_sup, cache, opts \\ []), 
+        do: GenServer.start_link(__MODULE__, {request_sup, cache, opts}, opts)
       
-      def init(request_sup) do 
+      def init({request_sup, cache, opts}) do 
         on_init()
-        {:ok, request_sup}
+        {:ok, %{request_sup: request_sup, cache: cache, opts: opts}}
+      end
+
+      def handle_cast({:response, hash, response}, state) do
+        Cachex.transaction!(state.cache, [hash], fn(cache_state) ->
+          case Cachex.get(cache_state, hash) do
+            {:missing, nil} -> #no request in cache
+              Logger.warn "We don't have cached callers for this request anymore"
+            {:ok, %{callers: callers, response: :pending}} -> 
+              respond_to callers, response
+              Logger.debug "Setting expiration time to #{inspect state.opts[:cache_timeout]}"
+              Cachex.set! cache_state, hash, %{callers: [], response: response}
+              Cachex.expire cache_state, hash, state.opts[:cache_timeout]
+            other ->
+              Logger.warn "WTF is #{inspect other} ?!"
+          end
+        end)
+        {:noreply, state}
+      end
+
+      defp respond_to([], response), 
+        do: :ok
+      defp respond_to([caller | others], response) do
+        Logger.debug "Responding to caller #{inspect caller} with #{inspect response}"
+        :ok = GenServer.reply caller, response
+        respond_to others, response
       end
 
       defp on_init, do: :ok
 
-      defp execute(request_sup, from, fun) do
-        Task.Supervisor.start_child(request_sup, fn ->
+      defp execute(state, {:hash, hash}, from, fun) do
+        facade = self()
+        Cachex.transaction!(state.cache, [hash], fn(cache_state) ->
+          case Cachex.get(cache_state, hash) do
+            {:missing, nil} -> #no request in cache
+              Logger.debug "We don't have cached result. Create queue of callers"
+              Cachex.set! cache_state, hash, %{callers: [from], response: :pending}
+              in_task(state, from, fn ->
+                response = fun.()
+                Logger.debug "Sending response: #{inspect response}"
+                GenServer.cast facade, {:response, hash, response}
+                response
+              end)
+              {:noreply, state}
+            {:ok, %{callers: callers, response: :pending}} -> 
+              Logger.debug "Command is processing ... appending caller to queue"
+              Cachex.set! cache_state, hash, %{callers: [from | callers], response: :pending}
+              {:noreply, state}
+            {:ok, %{response: response}} ->
+              Logger.debug "We have response #{inspect response}"
+              GenServer.reply from, response
+          end
+        end)
+      end
+      defp execute(state, _, from, fun),
+        do: in_task state, from, fun
+
+      defp in_task(state, from, fun) do
+        Task.Supervisor.start_child(state.request_sup, fn ->
           response = fun.()
           GenServer.reply from, response
         end)
-        {:noreply, request_sup}
       end
+
+
+      defp hash(cmd, params), do: {:hash, :crypto.hash(:sha256, inspect({cmd, params}))}
 
       defoverridable [on_init: 0]
     end
