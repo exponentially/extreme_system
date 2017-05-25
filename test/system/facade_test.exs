@@ -55,11 +55,11 @@ defmodule Extreme.System.FacadeTest do
     {:ok, agent} = Agent.start_link(fn -> :short_not_done_yet end)
     spawn fn ->
       assert :short_not_done_yet = Agent.get(agent, fn s -> s end)
-      assert {:done, :long}      = GenServer.call @facade, {:long, "I shouldn't block other requests"}
+      assert {:done, :long}      = GenServer.call @facade, {:long, "I shouldn't block other requests 1"}
       assert :short_done = Agent.get(agent, fn s -> s end)
     end
     :timer.sleep 10
-    assert {:done, :cmd} = GenServer.call @facade, {:cmd, 123}
+    assert {:done, :cmd} = GenServer.call @facade, {:cmd, 234}
     Agent.update(agent, fn _ -> :short_done end)
     :timer.sleep 1_000
   end
@@ -71,9 +71,9 @@ defmodule Extreme.System.FacadeTest do
 
   test "waits for response from already started request" do
     spawn fn ->
-      assert {:done, :long} = GenServer.call @facade, {:long, "I shouldn't block other requests"}
+      assert {:done, :long} = GenServer.call @facade, {:long, "I shouldn't block other requests 2"}
     end
     :timer.sleep 700
-    assert {:done, :long} = GenServer.call @facade, {:long, "I shouldn't block other requests"}, 200
+    assert {:done, :long} = GenServer.call @facade, {:long, "I shouldn't block other requests 2"}, 200
   end
 end
