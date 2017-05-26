@@ -85,16 +85,28 @@ defmodule Extreme.System.GenAggregateTest do
     {:ok, transaction_id_1, _} = Aggregate.do_something(a, "1 ")
     :ok = Aggregate.commit a, transaction_id_1
     assert Aggregate.message(a) == "1 "
+
+    #should timeout after 2 sec
     {:ok, transaction_id_3, _} = Aggregate.do_something(a, "throw_away")
     for n <- 2..5 do
       :timer.sleep 10
       spawn fn ->
-        {:ok, transaction_id_2, _} = Aggregate.do_something(a, "#{n} ")
-        :ok = Aggregate.commit a, transaction_id_2
+        Aggregate.do_something(a, "#{n} ")
       end
     end
-    :timer.sleep 3_000
-    {:error, :wrong_transaction} = Aggregate.commit a, transaction_id_3
-    assert Aggregate.message(a) == "1 2 3 4 5 "
+
+    {:down, {:commit_timeout, state}} = assert_down a, 3_000
+    #assert that there are 4 unprocessed commands in buffer
+    assert Enum.count(state.buffer) == 4
+
+    {:ok, a} = Aggregate.start_link
+    assert {:error, :wrong_transaction} = Aggregate.commit(a, transaction_id_3)
+  end
+
+  defp assert_down(a, wait_time) do
+    Process.flag :trap_exit, true
+    ref = Process.monitor a
+    {_, _, _, _, {:commit_timeout, _state}=reason} = assert_receive {:DOWN, ^ref, _, _, _}, wait_time
+    {:down, reason}
   end
 end
