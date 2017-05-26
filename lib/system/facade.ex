@@ -108,7 +108,7 @@ defmodule Extreme.System.Facade do
               Logger.warn "We don't have cached callers for this request anymore"
             {:ok, %{callers: callers, response: :pending}} -> 
               respond_to callers, response
-              Logger.debug "Setting expiration time to #{inspect ttl}"
+              #Logger.debug "Setting expiration time to #{inspect ttl}"
               Cachex.set! cache_state, hash, %{callers: [], response: response}
               Cachex.expire cache_state, hash, ttl
             other ->
@@ -121,7 +121,7 @@ defmodule Extreme.System.Facade do
       defp respond_to([], response), 
         do: :ok
       defp respond_to([caller | others], response) do
-        Logger.debug "Responding to caller #{inspect caller} with #{inspect response}"
+        #Logger.debug "Responding to caller #{inspect caller} with #{inspect response}"
         :ok = GenServer.reply caller, response
         respond_to others, response
       end
@@ -133,21 +133,21 @@ defmodule Extreme.System.Facade do
         Cachex.transaction!(state.cache, [hash], fn(cache_state) ->
           case Cachex.get(cache_state, hash) do
             {:missing, nil} -> #no request in cache
-              Logger.debug "We don't have cached result. Create queue of callers"
+              #Logger.debug "We don't have cached result. Create queue of callers"
               Cachex.set! cache_state, hash, %{callers: [from], response: :pending}
               in_task(state, from, fn ->
                 response = fun.()
-                Logger.debug "Sending response: #{inspect response}"
+                #Logger.debug "Sending response: #{inspect response}"
                 GenServer.cast facade, {:response, hash, response, ttl}
                 response
               end)
               {:noreply, state}
             {:ok, %{callers: callers, response: :pending}} -> 
-              Logger.debug "Command is processing ... appending caller to queue"
+              #Logger.debug "Command is processing ... appending caller to queue"
               Cachex.set! cache_state, hash, %{callers: [from | callers], response: :pending}
               {:noreply, state}
             {:ok, %{response: response}} ->
-              Logger.debug "We have response #{inspect response}"
+              #Logger.debug "We have response #{inspect response}"
               GenServer.reply from, response
           end
         end)
