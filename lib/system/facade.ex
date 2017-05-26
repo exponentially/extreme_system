@@ -75,31 +75,42 @@ defmodule Extreme.System.Facade do
     end
   end
 
-  defmacro __using__(_) do
+  defmacro __using__(opts \\ []) do
     quote do
       use     GenServer
       require Extreme.System.Facade
       import  Extreme.System.Facade
       require Logger
 
-      def start_link(request_sup, cache, opts \\ []), 
-        do: GenServer.start_link(__MODULE__, {request_sup, cache, opts}, opts)
+      @default_cache   unquote(opts[:default_cache]   || 1_000)
+      @cache_overrides unquote(opts[:cache_overrides] || [])
       
-      def init({request_sup, cache, opts}) do 
+      defp cache_ttl(cmd),
+        do: _cache_ttl(cmd, @cache_overrides)
+
+      defp _cache_ttl(cmd, nil),
+        do: @default_cache
+      defp _cache_ttl(cmd, overrides),
+        do: overrides[cmd] || @default_cache
+
+      def start_link(request_sup, cache, opts \\ []), 
+        do: GenServer.start_link(__MODULE__, {request_sup, cache}, opts)
+      
+      def init({request_sup, cache}) do 
         on_init()
-        {:ok, %{request_sup: request_sup, cache: cache, opts: opts}}
+        {:ok, %{request_sup: request_sup, cache: cache}}
       end
 
-      def handle_cast({:response, hash, response}, state) do
+      def handle_cast({:response, hash, response, ttl}, state) do
         Cachex.transaction!(state.cache, [hash], fn(cache_state) ->
           case Cachex.get(cache_state, hash) do
             {:missing, nil} -> #no request in cache
               Logger.warn "We don't have cached callers for this request anymore"
             {:ok, %{callers: callers, response: :pending}} -> 
               respond_to callers, response
-              Logger.debug "Setting expiration time to #{inspect state.opts[:cache_ttl]}"
+              Logger.debug "Setting expiration time to #{inspect ttl}"
               Cachex.set! cache_state, hash, %{callers: [], response: response}
-              Cachex.expire cache_state, hash, state.opts[:cache_ttl]
+              Cachex.expire cache_state, hash, ttl
             other ->
               Logger.warn "WTF is #{inspect other} ?!"
           end
@@ -117,7 +128,7 @@ defmodule Extreme.System.Facade do
 
       defp on_init, do: :ok
 
-      defp execute(state, {:hash, hash}, from, fun) do
+      defp execute(state, {:hash, hash, ttl}, from, fun) do
         facade = self()
         Cachex.transaction!(state.cache, [hash], fn(cache_state) ->
           case Cachex.get(cache_state, hash) do
@@ -127,7 +138,7 @@ defmodule Extreme.System.Facade do
               in_task(state, from, fn ->
                 response = fun.()
                 Logger.debug "Sending response: #{inspect response}"
-                GenServer.cast facade, {:response, hash, response}
+                GenServer.cast facade, {:response, hash, response, ttl}
                 response
               end)
               {:noreply, state}
@@ -152,7 +163,7 @@ defmodule Extreme.System.Facade do
       end
 
 
-      defp hash(cmd, params), do: {:hash, :crypto.hash(:sha256, inspect({cmd, params}))}
+      defp hash(cmd, params), do: {:hash, :crypto.hash(:sha256, inspect({cmd, params})), cache_ttl(cmd)}
 
       defoverridable [on_init: 0]
     end

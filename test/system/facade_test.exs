@@ -16,19 +16,27 @@ defmodule MyMsgHandler do
   def rnd(_) do
     {:ok, :rand.uniform}
   end
+
+  def long_rnd(payload) do
+    Logger.debug ":long_rnd command received with: #{inspect payload}"
+    :timer.sleep 800
+    Logger.debug "LongRnd process done"
+    {:ok, :rand.uniform}
+  end
 end
 
 defmodule MyFacade do
-  use     Extreme.System.Facade
+  use     Extreme.System.Facade, default_cache: 1_000, cache_overrides: [long_rnd: 2_000]
   require Logger
  
   def on_init,
     do: Logger.info "Started MyFacade"
 
-  route :cmd,          MyMsgHandler
-  route :cmd2,         {MyMsgHandler, :cmd}
-  route :long,         MyMsgHandler
-  route :rnd,          MyMsgHandler
+  route :cmd,      MyMsgHandler
+  route :cmd2,     {MyMsgHandler, :cmd}
+  route :long,     MyMsgHandler
+  route :rnd,      MyMsgHandler
+  route :long_rnd, MyMsgHandler
 end
 
 defmodule Extreme.System.FacadeTest do
@@ -38,7 +46,7 @@ defmodule Extreme.System.FacadeTest do
   @facade {:global, MyFacade}
 
   setup_all do
-    {:ok, _} = Extreme.System.FacadeSup.start_link MyFacade, @facade, cache_ttl: 1_000
+    {:ok, _} = Extreme.System.FacadeSup.start_link MyFacade, @facade
     :ok
   end
 
@@ -93,6 +101,9 @@ defmodule Extreme.System.FacadeTest do
     refute {:ok, response} == GenServer.call @facade, {:rnd, nil}
   end
 
-  test "command can override caching time"
-  test "command can disable caching"
+  test "command can override caching time" do
+    assert {:ok, response}  = GenServer.call @facade, {:long_rnd, nil}
+    :timer.sleep 1_500
+    assert {:ok, ^response} = GenServer.call @facade, {:long_rnd, nil}
+  end
 end
