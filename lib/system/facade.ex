@@ -82,7 +82,7 @@ defmodule Extreme.System.Facade do
       import  Extreme.System.Facade
       require Logger
 
-      @default_cache   unquote(opts[:default_cache]   || 1_000)
+      @default_cache   unquote(opts[:default_cache]   || :no_cache)
       @cache_overrides unquote(opts[:cache_overrides] || [])
       
       defp cache_ttl(cmd),
@@ -163,7 +163,10 @@ defmodule Extreme.System.Facade do
       end
 
 
-      defp hash(cmd, params), do: {:hash, :crypto.hash(:sha256, inspect({cmd, params})), cache_ttl(cmd)}
+      defp hash(cmd, params), do: _hash(cmd, params, cache_ttl(cmd))
+
+      defp _hash(cmd, params, :no_cache), do: :no_cache
+      defp _hash(cmd, params, ttl),       do: {:hash, :crypto.hash(:sha256, inspect({cmd, params})), ttl}
 
       defoverridable [on_init: 0]
     end

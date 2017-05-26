@@ -26,7 +26,7 @@ defmodule MyMsgHandler do
 end
 
 defmodule MyFacade do
-  use     Extreme.System.Facade, default_cache: 1_000, cache_overrides: [long_rnd: 2_000]
+  use     Extreme.System.Facade, default_cache: 1_000, cache_overrides: [long_rnd: 2_000, no_cache: :no_cache]
   require Logger
  
   def on_init,
@@ -37,6 +37,7 @@ defmodule MyFacade do
   route :long,     MyMsgHandler
   route :rnd,      MyMsgHandler
   route :long_rnd, MyMsgHandler
+  route :no_cache, {MyMsgHandler, :rnd}
 end
 
 defmodule Extreme.System.FacadeTest do
@@ -105,5 +106,10 @@ defmodule Extreme.System.FacadeTest do
     assert {:ok, response}  = GenServer.call @facade, {:long_rnd, nil}
     :timer.sleep 1_500
     assert {:ok, ^response} = GenServer.call @facade, {:long_rnd, nil}
+  end
+
+  test "command can disable caching" do
+    assert {:ok, response}  = GenServer.call @facade, {:no_cache, nil}
+    refute {:ok, response} == GenServer.call @facade, {:no_cache, nil}
   end
 end
