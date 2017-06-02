@@ -16,32 +16,27 @@ defmodule Extreme.System.MessageHandler do
 
       defp with_new_aggregate(log_msg, cmd, fun) do
         Logger.info log_msg
-        key        = UUID.uuid1
-        {:ok, pid} = spawn_new key
+        {:ok, pid, key} = PidFacade.spawn_new @pid_facade
         case fun.({:ok, pid, key}) do
-          {:ok, transaction, events} ->
-            {:ok, last_event} = apply_changes(pid, key, transaction, events, -1)
+          {:ok, transaction, events, version} ->
+            {:ok, last_event} = apply_changes(pid, key, transaction, events, version)
             {:created, key, last_event}
+          other -> other
         end
-      end
-
-      defp spawn_new(key) do
-        {:ok, pid} = aggregate_mod().start_link
-        #{:ok, pid} = AggregateSup.start_new aggregate_mod()
-        #:ok        = AggregateGroupRegistry.register(aggregate_mod(), key, pid)
-        {:ok, pid}
       end
 
       defp with_aggregate(log_msg, id, fun) do
         Logger.info log_msg
         case PidFacade.get_pid(@pid_facade, id) do
           {:ok, pid} ->
-            case fun.(pid) do
+            case fun.({:ok, pid}) do
               {:ok, transaction, events, version} ->
                 {:ok, last_event} = apply_changes(pid, id, transaction, events, version)
-              other -> other
+              other -> 
+                Logger.info "No events to commit: #{inspect other}"
+                other
             end
-            error -> error
+          error -> error
         end
       end
 
@@ -54,7 +49,7 @@ defmodule Extreme.System.MessageHandler do
         case EventStore.save_events(@es, {aggregate_mod(), key}, events, Logger.metadata, expected_version) do
           {:ok, last_event_number} ->
             :ok = aggregate_mod().commit aggregate, transaction, expected_version, last_event_number
-            Logger.info "Successfull commit of events"
+            Logger.info "Successfull commit of events. New aggregate version: #{last_event_number}"
             {:ok, last_event_number}
           error ->
             Logger.error "Error saving events #{inspect error}"

@@ -61,13 +61,17 @@ defmodule Extreme.System.GenAggregate do
       defp initial_state(ttl \\ 2_000),
         do: %{buffer: [], ttl: ttl, events: [], version: -1}
 
-      def commit(pid, transaction, expected_version, new_version), do: GenServer.call(pid, {:commit, transaction, expected_version, new_version})
+      def commit(pid, transaction, expected_version, new_version), 
+        do: GenServer.call(pid, {:commit, transaction, expected_version, new_version})
 
-      def exec(pid, cmd), do: GenServer.call(pid, {:cmd, cmd})
+      def exec(pid, cmd), 
+        do: GenServer.call(pid, {:cmd, cmd})
 
-      def reply(to, payload), do: GenServer.reply to, payload
+      def reply(to, payload), 
+        do: GenServer.reply to, payload
 
-      def apply(pid, events), do: GenServer.call(pid, {:apply_stream_events, events})
+      def apply(pid, events), 
+        do: GenServer.call(pid, {:apply_stream_events, events})
 
       def handle_call({:cmd, cmd}, from, %{buffer: [], transaction: nil}=state) do
         #Logger.debug "Executing: #{inspect cmd}"
@@ -113,7 +117,7 @@ defmodule Extreme.System.GenAggregate do
         case handle_exec(cmd, from, state) do
           {:block, from, {:events, events}, state} when is_list(events) ->
             schedule_rollback state.transaction, state.ttl
-            GenServer.reply from, {:ok, state.transaction, events}
+            GenServer.reply from, {:ok, state.transaction, events, state.version}
             {:noreply, %{state | events: events}}
           {:block, from, response, state} ->
             schedule_rollback state.transaction, state.ttl

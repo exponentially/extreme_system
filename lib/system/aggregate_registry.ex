@@ -27,7 +27,8 @@ defmodule Extreme.System.AggregateRegistry do
   Returns `{:ok, pid}` if the one exists, `:error` otherwise.
   """
   def get(server, key), 
-    do: _get(server, key)
+    do: server |> pid_table |> _get(key)
+
 
 
   @doc """
@@ -35,7 +36,8 @@ defmodule Extreme.System.AggregateRegistry do
 
   Returns :ok once when process is successfully registered
   """
-  def register(server, key, pid), do: GenServer.call(server, {:register, key, pid})
+  def register(server, key, pid), 
+    do: GenServer.call(server, {:register, key, pid})
 
 
   ## Server Callbacks
@@ -53,8 +55,8 @@ defmodule Extreme.System.AggregateRegistry do
 
   ## Private functions
 
-  defp _get(server, key) do
-    case :ets.lookup(pid_table(server), key) do
+  defp _get(table, key) do
+    case :ets.lookup(table, key) do
       [{^key, val}] -> {:ok, val}
       []            -> :error
     end
@@ -73,19 +75,25 @@ defmodule Extreme.System.AggregateRegistry do
   end
 
   def handle_call({:register, key, pid}, _from, state) do
-    state = case _get(state.table, key) do
-      {:ok, pid} -> {:ok, state}
+    result = case _get(state.pid_table, key) do
+      {:ok, pid} -> {:error, :key_already_registered, pid}
       :error     ->
         ref   = Process.monitor pid
-        true = :ets.insert state.table, {key, pid}
+        true = :ets.insert state.pid_table, {key, pid}
+        true = :ets.insert state.ref_table, {ref, key}
+        :ok
     end
-    {:reply, :ok, state}
+    {:reply, result, state}
   end
 
-  def handle_info({:DOWN, ref, :process, _pid, _reason}, state) do
-    {id, refs} = Map.pop(state.refs, ref)
-    processes = Map.delete(state.processes, id)
-    {:noreply, %{state | processes: processes, refs: refs}}
+  def handle_info({:DOWN, ref, :process, pid, reason}, state) do
+    case _get(state.ref_table, ref) do
+      {:ok, key} ->
+        Logger.warn "Process #{inspect pid} went down: #{inspect reason}"
+        :ets.delete state.ref_table, ref
+        :ets.delete state.pid_table, key
+    end
+    {:noreply, state}
   end
   def handle_info(_msg, state), do: {:noreply, state}
 end
