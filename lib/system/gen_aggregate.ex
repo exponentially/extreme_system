@@ -49,13 +49,19 @@ defmodule Extreme.System.GenAggregate do
     GenServer.start_link module, init_values, options
   end
 
+  def  state_params,
+    do: [:transaction, :ttl, :events, :buffer, :version]
+
   defmacro __using__(_) do
     quote do
       use GenServer
       alias Extreme.System.GenAggregate
       #require Logger
 
-      def commit(pid, transaction), do: GenServer.call(pid, {:commit, transaction})
+      defp initial_state(ttl \\ 2_000),
+        do: %{buffer: [], ttl: ttl, events: [], version: -1}
+
+      def commit(pid, transaction, expected_version, new_version), do: GenServer.call(pid, {:commit, transaction, expected_version, new_version})
 
       def exec(pid, cmd), do: GenServer.call(pid, {:cmd, cmd})
 
@@ -74,12 +80,13 @@ defmodule Extreme.System.GenAggregate do
         buffer = [{cmd, from} | state.buffer]
         {:noreply, %{state | buffer: buffer}}
       end
-      def handle_call({:commit, nil}, _from, state) do 
-      {:reply, {:error, :nil_transaction}, state}
-      end
-      def handle_call({:commit, transaction}, _from, %{transaction: transaction}=state) do
+      def handle_call({:commit, nil, _, _}, _from, state),
+        do: {:reply, {:error, :nil_transaction}, state}
+      def handle_call({:commit, _, version, _}, _from, %{version: current_version}=state) when version != current_version,
+        do: {:reply, {:error, :wrong_version, current_version, version}, state}
+      def handle_call({:commit, transaction, _, new_version}, _from, %{transaction: transaction}=state) do
         #Logger.debug "Commiting: #{inspect transaction}"
-        state = apply_events state.events, state
+        state = apply_events state.events, new_version, state
         GenServer.cast self(), :process_buffer
         {:reply, :ok, %{state | transaction: nil, events: []}}
       end
@@ -87,7 +94,7 @@ defmodule Extreme.System.GenAggregate do
         {:reply, {:error, :wrong_transaction}, state}
       end
       def handle_call({:apply_stream_events, events_stream}, _from, state) do
-        state = Enum.reduce(events_stream, state, fn({event, _event_number}, acc) -> apply_events([event], acc) end)
+        state = Enum.reduce(events_stream, state, fn({event, event_number}, acc) -> apply_events([event], event_number, acc) end)
         {:reply, :ok, state}
       end
 
@@ -127,7 +134,12 @@ defmodule Extreme.System.GenAggregate do
         {:ok, _ref} = :timer.send_after ttl, self(), {:rollback, transaction}
       end
 
-      defp apply_events([], state), do: state
+      defp apply_events([], _, state), do: state
+      defp apply_events([event | tail], version, state) do
+        state = state |> Map.put(:version, version)
+        state = apply_event(event, state)
+        apply_events tail, version, state
+      end
 
       defoverridable [handle_info: 2]
     end

@@ -27,7 +27,7 @@ defmodule Extreme.System.Mixfile do
 
   defp deps do
     [
-      {:extreme, "~> 0.7.1 or ~> 0.8.0 or ~> 0.9.0"},
+      {:extreme, "~> 0.9.0"},
       {:cachex, "~> 2.1"},
       {:amqp,    "~> 0.1.4 or ~> 0.2.2"},
       {:ex_doc, ">= 0.11.4", only: [:dev]},
