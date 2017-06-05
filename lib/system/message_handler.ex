@@ -14,35 +14,25 @@ defmodule Extreme.System.MessageHandler do
       defp prefix,         do: @prefix
 
 
-      defp with_new_aggregate(log_msg, cmd, fun) do
+      defp with_new_aggregate(log_msg, cmd, id \\ nil, fun) do
         Logger.info log_msg
-        {:ok, pid, key} = PidFacade.spawn_new @pid_facade
-        case fun.({:ok, pid, key}) do
-          {:ok, transaction, events, version} ->
-            {:ok, last_event} = apply_changes(pid, key, transaction, events, version)
-            {:created, key, last_event}
-          other -> other
-        end
+        key = id || UUID.uuid1
+        with {:ok, pid}                          <- PidFacade.spawn_new(@pid_facade, key),
+             {:ok, transaction, events, version} <- fun.({:ok, pid, key}),
+             {:ok, last_event}                   <- apply_changes(pid, key, transaction, events, version),
+             do: {:created, key, last_event}
       end
 
       defp with_aggregate(log_msg, id, fun) do
         Logger.info log_msg
-        case PidFacade.get_pid(@pid_facade, id) do
-          {:ok, pid} ->
-            case fun.({:ok, pid}) do
-              {:ok, transaction, events, version} ->
-                {:ok, last_event} = apply_changes(pid, id, transaction, events, version)
-              other -> 
-                Logger.info "No events to commit: #{inspect other}"
-                other
-            end
-          error -> error
-        end
+        with {:ok, pid}                          <-  PidFacade.get_pid(@pid_facade, id),
+             {:ok, transaction, events, version} <- fun.({:ok, pid}),
+             do: apply_changes(pid, id, transaction, events, version)
       end
 
       defp apply_changes(aggregate, _, transaction, [], expected_version) do
         :ok = aggregate_mod().commit aggregate, transaction, expected_version
-        Logger.info "Successfull commit of events"
+        Logger.info "No events to commit"
         {:ok, expected_version}
       end
       defp apply_changes(aggregate, key, transaction, events, expected_version) do
@@ -54,6 +44,7 @@ defmodule Extreme.System.MessageHandler do
           error ->
             Logger.error "Error saving events #{inspect error}"
             Process.exit aggregate, :kill
+            error
         end
       end
     end

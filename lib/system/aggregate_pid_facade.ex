@@ -14,8 +14,8 @@ defmodule Extreme.System.AggregatePidFacade do
   def get_pid(server, key),
     do: GenServer.call(server, {:get_pid, key})
 
-  def spawn_new(server),
-    do: GenServer.call(server, :spawn_new)
+  def spawn_new(server, key),
+    do: GenServer.call(server, {:spawn_new, key})
 
 
   def init({prefix, aggregate_mod}) do
@@ -28,11 +28,13 @@ defmodule Extreme.System.AggregatePidFacade do
     {:ok, state}
   end
 
-  def handle_call(:spawn_new, _from, state) do
-    key = UUID.uuid1
+  def handle_call({:spawn_new, key}, _from, state) do
     {:ok, pid} = AggregateSup.start_child state.aggregate_sup
-    :ok        = Registry.register state.registry, key, pid
-    {:reply, {:ok, pid, key}, state}
+    response = case Registry.register(state.registry, key, pid) do
+      :ok   -> {:ok, pid}
+      other -> other
+    end
+    {:reply, response, state}
   end
 
   def handle_call({:get_pid, key}, _from, state),
