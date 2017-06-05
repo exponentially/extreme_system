@@ -19,15 +19,27 @@ defmodule Extreme.System.MessageHandler do
         key = id || UUID.uuid1
         with {:ok, pid}                          <- PidFacade.spawn_new(@pid_facade, key),
              {:ok, transaction, events, version} <- fun.({:ok, pid, key}),
-             {:ok, last_event}                   <- apply_changes(pid, key, transaction, events, version),
-             do: {:created, key, last_event}
+             {:ok, last_event}                   <- apply_changes(pid, key, transaction, events, version)
+             do
+               {:created, key, last_event}
+             else 
+               any -> 
+                 Logger.info "Nothing to commit: #{inspect any}"
+                 any
+             end
       end
 
       defp with_aggregate(log_msg, id, fun) do
         Logger.info log_msg
         with {:ok, pid}                          <-  PidFacade.get_pid(@pid_facade, id),
-             {:ok, transaction, events, version} <- fun.({:ok, pid}),
-             do: apply_changes(pid, id, transaction, events, version)
+             {:ok, transaction, events, version} <- fun.({:ok, pid})
+             do 
+               apply_changes(pid, id, transaction, events, version)
+             else 
+               any -> 
+                 Logger.info "Nothing to commit: #{inspect any}"
+                 any
+             end
       end
 
       defp apply_changes(aggregate, _, transaction, [], expected_version) do
