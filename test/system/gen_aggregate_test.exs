@@ -2,7 +2,9 @@ defmodule Aggregate do
   use     Extreme.System.GenAggregate
   require Logger
 
-  defmodule State, do: defstruct [:transaction, :ttl, :events, :buffer, :msg]
+  defmodule State, 
+    do: defstruct GenAggregate.state_params ++ 
+        [:msg]
 
   ## Client API
 
@@ -18,7 +20,8 @@ defmodule Aggregate do
 
   ## Server Callbacks
 
-  def init(ttl), do: {:ok, %State{events: [], buffer: [], msg: "", ttl: ttl}}
+  def init(ttl),
+    do: {:ok, struct(State, initial_state(ttl) |> Map.put(:msg, ""))}
 
   def handle_exec({:do_something, val}, from, state) do
     Logger.debug "Doing #{val}"
@@ -29,10 +32,10 @@ defmodule Aggregate do
     {:noblock, from, state.msg, state}
   end
 
-  defp apply_events([%{val: val} | tail], state) do
-    state = %{ state | msg: state.msg <> val }
-    apply_events tail, state
-  end
+  defp apply_event(%{val: val}, state),
+    do: %{ state | msg: state.msg <> val }
+  defp apply_event(_, state),
+    do: state
 end
 
 defmodule Extreme.System.GenAggregateTest do
@@ -45,18 +48,18 @@ defmodule Extreme.System.GenAggregateTest do
   end
 
   test "can commit active transaction", %{a: a} do
-    {:ok, transaction_id, _} = Aggregate.do_something(a, "something")
-    :ok = Aggregate.commit a, transaction_id
+    {:ok, transaction_id, _events, version} = Aggregate.do_something(a, "something")
+    :ok = Aggregate.commit a, transaction_id, version, version
     assert Aggregate.message(a) == "something"
   end
 
   test "can't commit nil transaction", %{a: a} do
-    assert {:error, :nil_transaction} =  Aggregate.commit(a, nil)
+    assert {:error, :nil_transaction} =  Aggregate.commit(a, nil, 1, 1)
   end
 
   test "can't commit wrong transaction", %{a: a} do
-    {:ok, _, _} = Aggregate.do_something(a, "something")
-    assert {:error, :wrong_transaction} =  Aggregate.commit(a, :wrong_transaction)
+    {:ok, _, _, version} = Aggregate.do_something(a, "something")
+    assert {:error, :wrong_transaction, _, _} = Aggregate.commit(a, "wrong_transaction", -1, 0)
   end
 
   test "waits with second command until first is commited", %{a: a} do
@@ -82,12 +85,12 @@ defmodule Extreme.System.GenAggregateTest do
   end
 
   test "timeout", %{a: a} do
-    {:ok, transaction_id_1, _} = Aggregate.do_something(a, "1 ")
-    :ok = Aggregate.commit a, transaction_id_1
+    {:ok, transaction_id_1, _, version} = Aggregate.do_something(a, "1 ")
+    :ok = Aggregate.commit a, transaction_id_1, version, version
     assert Aggregate.message(a) == "1 "
 
     #should timeout after 2 sec
-    {:ok, transaction_id_3, _} = Aggregate.do_something(a, "throw_away")
+    {:ok, transaction_id_3, _, version} = Aggregate.do_something(a, "throw_away")
     for n <- 2..5 do
       :timer.sleep 10
       spawn fn ->
@@ -100,7 +103,7 @@ defmodule Extreme.System.GenAggregateTest do
     assert Enum.count(state.buffer) == 4
 
     {:ok, a} = Aggregate.start_link
-    assert {:error, :wrong_transaction} = Aggregate.commit(a, transaction_id_3)
+    assert {:error, :wrong_transaction} = Aggregate.commit(a, transaction_id_3, -1, 2)
   end
 
   defp assert_down(a, wait_time) do
