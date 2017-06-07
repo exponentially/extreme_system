@@ -46,7 +46,9 @@ defmodule Extreme.System.AggregatePidFacade do
 
   def handle_cast({:exit_process, key, reason}, state) do
     case Registry.get(state.registry, key) do
-      {:ok, pid} -> Process.exit pid, reason
+      {:ok, pid} -> 
+        Logger.debug "Killing process #{inspect pid}: #{inspect reason}"
+        AggregateSup.terminate_child state.aggregate_sup, pid
       _          -> :ok
     end
     {:noreply, state}
