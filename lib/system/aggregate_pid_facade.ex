@@ -17,6 +17,9 @@ defmodule Extreme.System.AggregatePidFacade do
   def spawn_new(server, key),
     do: GenServer.call(server, {:spawn_new, key})
 
+  def exit_process(server, key, reason),
+    do: GenServer.cast(server, {:exit_process, key, reason})
+
 
   def init({prefix, aggregate_mod}) do
     state = %{
@@ -39,6 +42,15 @@ defmodule Extreme.System.AggregatePidFacade do
 
   def handle_call({:get_pid, key}, _from, state),
     do: {:reply, _get_pid(key, state), state}
+
+
+  def handle_cast({:exit_process, key, reason}, state) do
+    case Registry.get(state.registry, key) do
+      {:ok, pid} -> Process.exit pid, reason
+      _          -> :ok
+    end
+    {:noreply, state}
+  end
 
 
   defp _get_pid(key, state) do

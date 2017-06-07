@@ -24,7 +24,8 @@ defmodule Extreme.System.MessageHandler do
                {:created, key, last_event}
              else 
                any -> 
-                 Logger.info "Nothing to commit: #{inspect any}"
+                 Logger.warn "New aggregate creation failed: #{inspect any}"
+                 PidFacade.exit_process @pid_facade, key, {:creation_failed, any}
                  any
              end
       end
