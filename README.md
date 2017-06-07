@@ -10,7 +10,7 @@ If [available in Hex](https://hex.pm/docs/publish), the package can be installed
 
     ```elixir
     def deps do
-      [{:extreme_system, "~> 0.0.4"}]
+      [{:extreme_system, "~> 0.0.5"}]
     end
     ```
 
