@@ -15,7 +15,7 @@ defmodule Extreme.System.MessageHandler do
 
 
       defp with_new_aggregate(log_msg, cmd, id \\ nil, fun) do
-        Logger.info log_msg
+        Logger.info fn -> log_msg end
         key = id || UUID.uuid1
         with {:ok, pid}                          <- PidFacade.spawn_new(@pid_facade, key),
              {:ok, transaction, events, version} <- fun.({:ok, pid, key}),
@@ -24,38 +24,56 @@ defmodule Extreme.System.MessageHandler do
                {:created, key, last_event}
              else 
                any -> 
-                 Logger.warn "New aggregate creation failed: #{inspect any}"
+                 Logger.warn fn -> "New aggregate creation failed: #{inspect any}" end
                  PidFacade.exit_process @pid_facade, key, {:creation_failed, any}
                  any
              end
       end
 
       defp with_aggregate(log_msg, id, fun) do
-        Logger.info log_msg
-        with {:ok, pid}                          <-  PidFacade.get_pid(@pid_facade, id),
+        Logger.info fn -> log_msg end
+        with {:ok, pid}                          <- get_pid(id),
              {:ok, transaction, events, version} <- fun.({:ok, pid})
              do 
                apply_changes(pid, id, transaction, events, version)
              else 
                any -> 
-                 Logger.info "Nothing to commit: #{inspect any}"
+                 Logger.info fn -> "Nothing to commit: #{inspect any}" end
                  any
              end
       end
 
+      defp with_aggregate(:no_commit, log_msg, id, fun) do
+        Logger.info fn -> log_msg end
+        result = case get_pid(id) do
+          {:ok, pid} ->
+            case fun.({:ok, pid}) do
+              {:ok, transaction, events, version} ->
+                {:ok, fn -> apply_changes(pid, id, transaction, events, version) end}
+              any ->
+                Logger.info fn -> "Nothing to commit: #{inspect any}" end
+                any
+            end
+          other -> other
+        end
+      end
+
+      defp get_pid(id),
+        do: PidFacade.get_pid(@pid_facade, id)
+
       defp apply_changes(aggregate, _, transaction, [], expected_version) do
         :ok = aggregate_mod().commit aggregate, transaction, expected_version
-        Logger.info "No events to commit"
+        Logger.info fn -> "No events to commit" end
         {:ok, expected_version}
       end
       defp apply_changes(aggregate, key, transaction, events, expected_version) do
         case EventStore.save_events(@es, {aggregate_mod(), key}, events, Logger.metadata, expected_version) do
           {:ok, last_event_number} ->
             :ok = aggregate_mod().commit aggregate, transaction, expected_version, last_event_number
-            Logger.info "Successfull commit of events. New aggregate version: #{last_event_number}"
+            Logger.info fn ->  "Successfull commit of events. New aggregate version: #{last_event_number}" end
             {:ok, last_event_number}
           error ->
-            Logger.error "Error saving events #{inspect error}"
+            Logger.error fn -> "Error saving events #{inspect error}" end
             Process.exit aggregate, :kill
             error
         end

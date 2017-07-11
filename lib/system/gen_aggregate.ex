@@ -94,7 +94,7 @@ defmodule Extreme.System.GenAggregate do
         GenServer.cast self(), :process_buffer
         {:reply, :ok, %{state | transaction: nil, events: []}}
       end
-      def handle_call({:commit, t1}, _from, %{transaction: transaction}=state) do 
+      def handle_call({:commit, t1, _, _}, _from, %{transaction: transaction}=state) when t1 != transaction do 
         {:reply, {:error, :wrong_transaction}, state}
       end
       def handle_call({:apply_stream_events, events_stream}, _from, state) do
