@@ -74,7 +74,7 @@ defmodule Extreme.System.EventStore do
     {events, is_end_of_stream} = case Extreme.execute(extreme, read_events(stream, start_at, per_page)) do
       {:ok, response} ->
       events = Enum.map(response.events, fn e ->
-        event = Poison.decode!(e.event.data, as: struct(String.to_atom(e.event.event_type)))
+        event = Poison.decode!(e.event.data, as: struct(String.to_atom(e.event.event_type)), keys: :atoms)
         {event, e.event.event_number}
       end)
       {events, response.is_end_of_stream}
