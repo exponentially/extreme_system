@@ -62,7 +62,7 @@ defmodule Extreme.System.MessageHandler do
         do: PidFacade.get_pid(@pid_facade, id)
 
       defp apply_changes(aggregate, _, transaction, [], expected_version) do
-        :ok = aggregate_mod().commit aggregate, transaction, expected_version
+        :ok = aggregate_mod().commit aggregate, transaction, expected_version, expected_version
         Logger.info fn -> "No events to commit" end
         {:ok, expected_version}
       end
