@@ -22,7 +22,7 @@ defmodule Extreme.System.RabbitMQ.Listener do
     q      = definition.queue
     q_name = q.name
     if q[:qos_opts],
-      do: :ok                      = Basic.qos        chan, q.qos_opts
+      do: :ok                      = Basic.qos     chan, q.qos_opts
     if q[:declare_opts],
       do: {:ok, %{queue: ^q_name}} = Queue.declare chan, q.name, q.declare_opts
     if x = definition[:exchange] do
@@ -59,7 +59,7 @@ defmodule Extreme.System.RabbitMQ.Listener do
     nack    = fn -> Basic.reject(channel, tag, requeue: false) end
     retry   = fn -> Basic.reject(channel, tag, requeue: true) end
     headers = if is_list(headers) do
-      Enum.reduce(headers, %{}, fn({k, _, v}, acc) -> Map.put(acc, String.to_existing_atom(k), v) end)
+      Enum.reduce(headers, %{}, fn({k, _, v}, acc) -> Map.put(acc, String.to_atom(k), v) end)
     else
       %{}
     end

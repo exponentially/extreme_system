@@ -58,6 +58,9 @@ defmodule Extreme.System.MessageHandler do
         end
       end
 
+      defp save_events(key, events, expected_version // -2),
+        do: EventStore.save_events(@es, {aggregate_mod(), key}, events, Logger.metadata, expected_version)
+
       defp get_pid(id),
         do: PidFacade.get_pid(@pid_facade, id)
 
@@ -67,7 +70,7 @@ defmodule Extreme.System.MessageHandler do
         {:ok, expected_version}
       end
       defp apply_changes(aggregate, key, transaction, events, expected_version) do
-        case EventStore.save_events(@es, {aggregate_mod(), key}, events, Logger.metadata, expected_version) do
+        case save_events(key, events, expected_version) do
           {:ok, last_event_number} ->
             :ok = aggregate_mod().commit aggregate, transaction, expected_version, last_event_number
             Logger.info fn ->  "Successfull commit of events. New aggregate version: #{last_event_number}" end
