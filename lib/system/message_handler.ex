@@ -58,7 +58,7 @@ defmodule Extreme.System.MessageHandler do
         end
       end
 
-      defp save_events(key, events, expected_version // -2),
+      defp save_events(key, events, expected_version \\ -2),
         do: EventStore.save_events(@es, {aggregate_mod(), key}, events, Logger.metadata, expected_version)
 
       defp get_pid(id),
