@@ -58,11 +58,38 @@ defmodule Extreme.System.MessageHandler do
         end
       end
 
-      defp save_events(key, events, expected_version \\ -2),
+      defp get_pid(id),
+        do: PidFacade.get_pid(@pid_facade, id, when_pid_is_not_registered())
+
+      @doc """
+      Should return {:ok, last_event_number} on success, otherwise aggregate will be terminated and
+      that result will be returned to the caller
+      """
+      def save_events(key, events, expected_version \\ -2)
+      def save_events(key, events, expected_version),
         do: EventStore.save_events(@es, {aggregate_mod(), key}, events, Logger.metadata, expected_version)
 
-      defp get_pid(id),
-        do: PidFacade.get_pid(@pid_facade, id)
+      @doc """
+      Should return function that takes `aggregate_mod`, `id` and returns {:ok, pid} or `anything`.
+      If `anything` is returned, `with_aggregate` will return that value and won't run command on aggregate
+      """
+      def when_pid_is_not_registered, do: fn aggregate_mod, key -> get_from_es(aggregate_mod, key) end
+
+      defp spawn_new(key), do: PidFacade.spawn_new(@pid_facade, key)
+
+      defp get_from_es(aggregate_mod, key) do
+        case EventStore.has?(@es, aggregate_mod, key) do
+          true ->
+            {:ok, pid} = PidFacade.spawn_new(@pid_facade, key)
+            events     = EventStore.stream_events @es, {aggregate_mod, key}
+            Logger.debug fn -> "Applying events for existing aggregate #{key}" end
+            :ok        = aggregate_mod.apply pid, events
+            {:ok, pid}
+          false ->
+            Logger.warn fn -> "No events found for aggregate: #{key}" end
+            {:error, :not_found}
+        end
+      end
 
       defp apply_changes(aggregate, _, transaction, [], expected_version) do
         :ok = aggregate_mod().commit aggregate, transaction, expected_version, expected_version
@@ -81,6 +108,8 @@ defmodule Extreme.System.MessageHandler do
             error
         end
       end
+
+      defoverridable [save_events: 3, when_pid_is_not_registered: 0]
     end
   end
 end

@@ -3,8 +3,8 @@ defmodule Extreme.System.Mixfile do
 
   def project do
     [app: :extreme_system,
-     version: "0.0.9",
-     elixir: "~> 1.3",
+     version: "0.1.0",
+     elixir: "~> 1.3 or ~> 1.4 or ~> 1.5",
      source_url: "https://github.com/exponentially/extreme_system",
      description: """
      Building blocks for distributed systems

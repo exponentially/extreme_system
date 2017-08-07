@@ -11,8 +11,8 @@ defmodule Extreme.System.AggregatePidFacade do
   def start_link(prefix, aggregate_mod), 
     do: GenServer.start_link(__MODULE__, {prefix, aggregate_mod}, name: name(aggregate_mod))
 
-  def get_pid(server, key),
-    do: GenServer.call(server, {:get_pid, key})
+  def get_pid(server, key, when_not_registered),
+    do: GenServer.call(server, {:get_pid, key, when_not_registered})
 
   def spawn_new(server, key),
     do: GenServer.call(server, {:spawn_new, key})
@@ -40,8 +40,8 @@ defmodule Extreme.System.AggregatePidFacade do
     {:reply, response, state}
   end
 
-  def handle_call({:get_pid, key}, _from, state),
-    do: {:reply, _get_pid(key, state), state}
+  def handle_call({:get_pid, key, when_not_registered}, _from, state),
+    do: {:reply, _get_pid(key, state, when_not_registered), state}
 
 
   def handle_cast({:exit_process, key, reason}, state) do
@@ -54,26 +54,10 @@ defmodule Extreme.System.AggregatePidFacade do
     {:noreply, state}
   end
 
-
-  defp _get_pid(key, state) do
+  defp _get_pid(key, state, when_not_registered) do
     case Registry.get(state.registry, key) do
-      :error     -> _get_from_es(state.event_store, state.aggregate_sup, state.registry, state.aggregate_mod, key)
+      :error     -> when_not_registered.(state.aggregate_mod, key)
       {:ok, pid} -> {:ok, pid}
-    end
-  end
-
-  defp _get_from_es(event_store, aggregate_sup, registry, aggregate_mod, key) do
-    case EventStore.has?(event_store, aggregate_mod, key) do
-      true ->
-        events = EventStore.stream_events event_store, {aggregate_mod, key}
-        Logger.debug "Applying events for existing aggregate #{key}"
-        {:ok, pid} = AggregateSup.start_child aggregate_sup
-        :ok        = aggregate_mod.apply pid, events
-        :ok        = Registry.register registry, key, pid
-        {:ok, pid}
-      false ->
-        Logger.warn "No events found for carrier lane: #{key}"
-        {:error, :not_found}
     end
   end
 end
