@@ -17,7 +17,7 @@ defmodule Extreme.System.MessageHandler do
       defp with_new_aggregate(log_msg, cmd, id \\ nil, fun) do
         Logger.info fn -> log_msg end
         key = id || UUID.uuid1
-        with {:ok, pid}                          <- PidFacade.spawn_new(@pid_facade, key),
+        with {:ok, pid}                          <- spawn_new(key),
              {:ok, transaction, events, version} <- fun.({:ok, pid, key}),
              {:ok, last_event}                   <- apply_changes(pid, key, transaction, events, version)
              do
@@ -70,17 +70,17 @@ defmodule Extreme.System.MessageHandler do
         do: EventStore.save_events(@es, {aggregate_mod(), key}, events, Logger.metadata, expected_version)
 
       @doc """
-      Should return function that takes `aggregate_mod`, `id` and returns {:ok, pid} or `anything`.
+      Should return function that takes `aggregate_mod`, `id`, `spawn_new_fun` and returns {:ok, pid} or `anything`.
       If `anything` is returned, `with_aggregate` will return that value and won't run command on aggregate
       """
-      def when_pid_is_not_registered, do: fn aggregate_mod, key -> get_from_es(aggregate_mod, key) end
+      def when_pid_is_not_registered, do: fn aggregate_mod, key, spawn_new_fun -> get_from_es(aggregate_mod, key, spawn_new_fun) end
 
       defp spawn_new(key), do: PidFacade.spawn_new(@pid_facade, key)
 
-      defp get_from_es(aggregate_mod, key) do
+      defp get_from_es(aggregate_mod, key, spawn_new_fun) do
         case EventStore.has?(@es, aggregate_mod, key) do
           true ->
-            {:ok, pid} = PidFacade.spawn_new(@pid_facade, key)
+            {:ok, pid} = spawn_new_fun.()
             events     = EventStore.stream_events @es, {aggregate_mod, key}
             Logger.debug fn -> "Applying events for existing aggregate #{key}" end
             :ok        = aggregate_mod.apply pid, events

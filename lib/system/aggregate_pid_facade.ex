@@ -32,11 +32,7 @@ defmodule Extreme.System.AggregatePidFacade do
   end
 
   def handle_call({:spawn_new, key}, _from, state) do
-    {:ok, pid} = AggregateSup.start_child state.aggregate_sup
-    response = case Registry.register(state.registry, key, pid) do
-      :ok   -> {:ok, pid}
-      other -> other
-    end
+    response = _spawn_new(key, state)
     {:reply, response, state}
   end
 
@@ -56,8 +52,16 @@ defmodule Extreme.System.AggregatePidFacade do
 
   defp _get_pid(key, state, when_not_registered) do
     case Registry.get(state.registry, key) do
-      :error     -> when_not_registered.(state.aggregate_mod, key)
+      :error     -> when_not_registered.(state.aggregate_mod, key, fn -> _spawn_new(key, state) end)
       {:ok, pid} -> {:ok, pid}
+    end
+  end
+
+  defp _spawn_new(key, state) do
+    {:ok, pid} = AggregateSup.start_child state.aggregate_sup
+    case Registry.register(state.registry, key, pid) do
+      :ok   -> {:ok, pid}
+      other -> other
     end
   end
 end

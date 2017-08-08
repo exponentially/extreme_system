@@ -53,6 +53,7 @@ defmodule Extreme.System.RabbitMQ.Listener do
     consume route, state.channel, tag, body, opts[:headers], state.processor, redelivered?
     {:noreply, state}
   end
+  def handle_info(_, state), do: {:noreply, state}
 
   defp consume(route, channel, tag, body, headers, event_processor, redelivered?) do
     ack     = fn -> Basic.ack(channel, tag, [])end
