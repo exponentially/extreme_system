@@ -23,6 +23,15 @@ defmodule MyMsgHandler do
     Logger.debug "LongRnd process done"
     {:ok, :rand.uniform}
   end
+
+  def expire!(:error) do
+    Logger.debug ":expire command received from alarm with :error"
+    {:error, :s_it_happens}
+  end
+  def expire!(id) do
+    Logger.debug ":expire command received from alarm with: #{inspect id}"
+    {:ok, id}
+  end
 end
 
 defmodule MyFacade do
@@ -38,6 +47,11 @@ defmodule MyFacade do
   route :rnd,      MyMsgHandler
   route :long_rnd, MyMsgHandler
   route :no_cache, {MyMsgHandler, :rnd}
+
+  on_alarm {:expire!, id}, fn ->
+    with {:ok, ^id} <- MyMsgHandler.expire!(id),
+                do:    :ok
+  end
 end
 
 defmodule Extreme.System.FacadeTest do
@@ -112,4 +126,10 @@ defmodule Extreme.System.FacadeTest do
     assert {:ok, response}  = GenServer.call @facade, {:no_cache, nil}
     refute {:ok, response} == GenServer.call @facade, {:no_cache, nil}
   end
+
+  test "handles alarm message" do
+    assert :ok == GenServer.call @facade, {:alarm, :before, {:expire!, 123}}
+    refute :ok == GenServer.call @facade, {:alarm, :before, {:expire!, :error}}
+  end
+
 end

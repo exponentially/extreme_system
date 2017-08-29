@@ -6,11 +6,18 @@ defmodule Extreme.System.Facade do
         route :do_something,      MyController          # calls MyController.do_something(params)
         route :do_something_else, {MyController, :else} # calls MyController.else(params)
 
-        def handle_call({:get_timezone, :point, lat, long, metadata}, from, request_sup) do
-          execute(request_sup, from, fn ->
+        on_alarm {:expire!, id}, fn ->
+          with {:ok, _} <- Offer.expire!(id),
+               do:         :ok
+        end
+
+        def handle_call({:get_timezone, :point, lat, long, metadata}=payload, from, state) do
+          hash = hash(:get_timezone, payload)
+          execute(state, hash, from, fn ->
             Logger.metadata metadata
             Timezone.get_timezone(:point, lat, long)
           end)
+          {:noreply, state}
         end
       end
 
@@ -72,6 +79,16 @@ defmodule Extreme.System.Facade do
         end)
 	    {:noreply, state}
 	  end
+    end
+  end
+
+  defmacro on_alarm(msg, fun) do
+    quote do
+      def handle_call({:alarm, _, unquote(msg)}, from, state) do
+        req_id = hash(:alarm, unquote(msg))
+        execute(state, req_id, from, unquote(fun))
+        {:noreply, state}
+      end
     end
   end
 
