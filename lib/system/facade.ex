@@ -84,9 +84,10 @@ defmodule Extreme.System.Facade do
 
   defmacro on_alarm(msg, fun) do
     quote do
-      def handle_call({:alarm, _, unquote(msg)}, from, state) do
+      def handle_call({:alarm, on_time?, unquote(msg)}, from, state) do
         req_id = hash(:alarm, unquote(msg))
-        execute(state, req_id, from, unquote(fun))
+        handler = unquote(fun)
+        execute(state, req_id, from, fn -> handler.(on_time?) end)
         {:noreply, state}
       end
     end

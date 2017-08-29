@@ -24,12 +24,12 @@ defmodule MyMsgHandler do
     {:ok, :rand.uniform}
   end
 
-  def expire!(:error) do
-    Logger.debug ":expire command received from alarm with :error"
+  def run!(:error) do
+    Logger.debug ":run command received on time from alarm with :error"
     {:error, :s_it_happens}
   end
-  def expire!(id) do
-    Logger.debug ":expire command received from alarm with: #{inspect id}"
+  def run!(id) do
+    Logger.debug ":run command received on time from alarm with: #{inspect id}"
     {:ok, id}
   end
 end
@@ -48,10 +48,12 @@ defmodule MyFacade do
   route :long_rnd, MyMsgHandler
   route :no_cache, {MyMsgHandler, :rnd}
 
-  on_alarm {:expire!, id}, fn ->
-    with {:ok, ^id} <- MyMsgHandler.expire!(id),
-                do:    :ok
+  on_alarm {:run!, id}, fn
+    :on_time -> with {:ok, ^id} <- MyMsgHandler.run!(id),
+                            do:    :ok
+    other    -> other
   end
+
 end
 
 defmodule Extreme.System.FacadeTest do
@@ -128,8 +130,9 @@ defmodule Extreme.System.FacadeTest do
   end
 
   test "handles alarm message" do
-    assert :ok == GenServer.call @facade, {:alarm, :before, {:expire!, 123}}
-    refute :ok == GenServer.call @facade, {:alarm, :before, {:expire!, :error}}
+    assert :ok            == GenServer.call @facade, {:alarm, :on_time,       {:run!, 123}}
+    assert {:expired, 30} == GenServer.call @facade, {:alarm, {:expired, 30}, {:run!, 234}}
+    refute :ok            == GenServer.call @facade, {:alarm, :on_time,       {:run!, :error}}
   end
 
 end
