@@ -46,6 +46,7 @@ defmodule Extreme.System.Facade do
   defmacro route(cmd, {controller, action}) do
     quote do
 	  def handle_call({unquote(cmd), params}, from, state) do
+        Logger.info fn -> "Routing #{inspect unquote(cmd)} to #{inspect unquote(controller)}#{inspect unquote(action)}" end
         req_id = hash(unquote(cmd), params)
         execute(state, req_id, from, fn ->
 	      unquote(controller).unquote(action)(params)
@@ -53,6 +54,8 @@ defmodule Extreme.System.Facade do
 	    {:noreply, state}
       end
 	  def handle_call({unquote(cmd), params, metadata}, from, state) do
+        Logger.metadata metadata
+        Logger.info fn -> "Routing #{inspect unquote(cmd)} to #{inspect unquote(controller)}#{inspect unquote(action)}" end
         req_id = hash(unquote(cmd), params)
         execute(state, req_id, from, fn ->
           Logger.metadata metadata
@@ -65,6 +68,7 @@ defmodule Extreme.System.Facade do
   defmacro route(cmd, controller) do
     quote do
 	  def handle_call({unquote(cmd), params}, from, state) do
+        Logger.info fn -> "Routing #{inspect unquote(cmd)} to #{inspect unquote(controller)}" end
         req_id = hash(unquote(cmd), params)
         execute(state, req_id, from, fn ->
 	      unquote(controller).unquote(cmd)(params)
@@ -72,6 +76,8 @@ defmodule Extreme.System.Facade do
 	    {:noreply, state}
       end
 	  def handle_call({unquote(cmd), params, metadata}, from, state) do
+        Logger.metadata metadata
+        Logger.info fn -> "Routing #{inspect unquote(cmd)} to #{inspect unquote(controller)}" end
         req_id = hash(unquote(cmd), params)
         execute(state, req_id, from, fn ->
           Logger.metadata metadata
@@ -85,6 +91,7 @@ defmodule Extreme.System.Facade do
   defmacro on_alarm(msg, fun) do
     quote do
       def handle_call({:alarm, on_time?, unquote(msg)}, from, state) do
+        Logger.info fn -> "Received #{inspect on_time?} alarm message #{inspect unquote(msg)}" end
         req_id = hash(:alarm, unquote(msg))
         handler = unquote(fun)
         execute(state, req_id, from, fn -> handler.(on_time?) end)
