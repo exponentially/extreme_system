@@ -1,12 +1,46 @@
 defmodule Extreme.System.MessageHandler do
+  defmacro proxy_to_new_aggregate(cmd) do
+    quote do
+      def unquote(cmd)(params) do
+        execute_on_new(unquote(cmd), params)
+        |> @pipe_resp_thru.()
+      end
+    end
+  end
+
+  defmacro proxy_to_aggregate(cmd, opts \\ []) do
+    quote do
+      def unquote(cmd)(params) do
+        id_field=Keyword.get(unquote(opts), :id)
+        case id_field do
+          nil ->
+            params
+            |> Map.fetch!("id")
+            |> execute_on(unquote(cmd), params)
+          :param -> 
+            params
+            |> execute_on(unquote(cmd))
+          _ ->
+            params
+            |> Map.fetch!(id_field)
+            |> execute_on(unquote(cmd), params)
+        end
+        |> @pipe_resp_thru.()
+      end
+    end
+  end
+
   defmacro __using__(opts) do
     quote do
       require Logger
       alias   Extreme.System.EventStore
       alias   Extreme.System.AggregatePidFacade, as: PidFacade
+      require Extreme.System.MessageHandler
+      import  Extreme.System.MessageHandler
 
       @aggregate_mod   Keyword.fetch!(unquote(opts), :aggregate_mod)
       @prefix          Keyword.fetch!(unquote(opts), :prefix)
+      @pipe_resp_thru  Keyword.get(unquote(opts), :pipe_response_thru)
       @es              Extreme.System.EventStore.name(@prefix)
       @pid_facade      Extreme.System.AggregatePidFacade.name(@aggregate_mod)
 
@@ -15,7 +49,7 @@ defmodule Extreme.System.MessageHandler do
 
 
       defp with_new_aggregate(log_msg, cmd, id \\ nil, fun) do
-        Logger.info fn -> log_msg end
+        if log_msg, do: Logger.info fn -> log_msg end
         key = id || UUID.uuid1
         with {:ok, pid}                          <- spawn_new(key),
              {:ok, transaction, events, version} <- fun.({:ok, pid, key}),
@@ -31,7 +65,7 @@ defmodule Extreme.System.MessageHandler do
       end
 
       defp with_aggregate(log_msg, id, fun) do
-        Logger.info fn -> log_msg end
+        if log_msg, do: Logger.info fn -> log_msg end
         with {:ok, pid}                          <- get_pid(id),
              {:ok, transaction, events, version} <- fun.({:ok, pid})
              do 
@@ -44,7 +78,7 @@ defmodule Extreme.System.MessageHandler do
       end
 
       defp with_aggregate(:no_commit, log_msg, id, fun) do
-        Logger.info fn -> log_msg end
+        if log_msg, do: Logger.info fn -> log_msg end
         result = case get_pid(id) do
           {:ok, pid} ->
             case fun.({:ok, pid}) do
@@ -55,6 +89,25 @@ defmodule Extreme.System.MessageHandler do
                 any
             end
           other -> other
+        end
+      end
+
+
+      defp execute_on_new(cmd, params, id \\ nil) do
+        with_new_aggregate nil, cmd, id, fn {:ok, pid, id} ->
+          apply aggregate_mod(), cmd, [pid, {id, params}, Logger.metadata]
+        end
+      end
+
+      defp execute_on(id, cmd) do
+        with_aggregate nil, id, fn {:ok, pid} ->
+          apply aggregate_mod(), cmd, [pid]
+        end
+      end
+
+      defp execute_on(id, cmd, params) do
+        with_aggregate nil, id, fn {:ok, pid} ->
+          apply aggregate_mod(), cmd, [pid, params, Logger.metadata]
         end
       end
 
