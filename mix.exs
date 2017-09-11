@@ -3,7 +3,7 @@ defmodule Extreme.System.Mixfile do
 
   def project do
     [app: :extreme_system,
-     version: "0.1.2",
+     version: "0.1.3",
      elixir: "~> 1.3 or ~> 1.4 or ~> 1.5",
      source_url: "https://github.com/exponentially/extreme_system",
      description: """
