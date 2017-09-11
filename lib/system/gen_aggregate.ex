@@ -59,7 +59,7 @@ defmodule Extreme.System.GenAggregate do
     
       def handle_exec({unquote(cmd), unquote(params), unquote(metadata)}, from, state) do
         Logger.metadata unquote(metadata)
-        Logger.info  fn -> "Executing #{inspect unquote(cmd)} on #{inspect Map.get(state, :id)} with params" end
+        Logger.info  fn -> "Executing #{inspect unquote(cmd)} on #{inspect Map.get(state, :id) || __MODULE__} with params" end
         Logger.debug fn -> inspect unquote(params) end
         result = unquote(fun).(from, unquote(params), state)
         Logger.metadata []
@@ -73,7 +73,8 @@ defmodule Extreme.System.GenAggregate do
         do: exec server, unquote(cmd)
     
       def handle_exec(unquote(cmd), from, state) do
-        Logger.info fn -> "Executing #{inspect unquote(cmd)} on #{inspect Map.get(state, :id)} without params" end
+        Logger.metadata []
+        Logger.info fn -> "Executing #{inspect unquote(cmd)} on #{inspect Map.get(state, :id) || __MODULE__} without params" end
         unquote(fun).(from, state)
       end
     end
@@ -104,7 +105,6 @@ defmodule Extreme.System.GenAggregate do
         do: GenServer.call(pid, {:apply_stream_events, events})
 
       def handle_call({:cmd, cmd}, from, %{buffer: [], transaction: nil}=state) do
-        #Logger.debug "Executing: #{inspect cmd}"
         lock = make_ref()
         GenServer.cast self(), {:execute, {cmd, from}}
         {:noreply, %{state | transaction: lock}}
@@ -168,7 +168,7 @@ defmodule Extreme.System.GenAggregate do
         {:ok, _ref} = :timer.send_after ttl, self(), {:rollback, transaction}
       end
 
-      defp _ok(state, from),
+      defp _ok(from, state),
         do: {:noblock, from, {:ok, state.version}, state}
         
       defp _log(msg, metadata \\ [], level \\ :info),
