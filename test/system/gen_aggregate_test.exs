@@ -6,31 +6,24 @@ defmodule Aggregate do
     do: defstruct GenAggregate.state_params ++ 
         [:msg]
 
-  ## Client API
 
   def start_link(ttl \\ 2_000), do: GenAggregate.start_link __MODULE__, ttl
-
-  def do_something(pid, val) do 
-    Logger.debug "Try #{val}"
-    exec pid, {:do_something, val}
-  end
-
-  def message(pid), do: exec pid, :get_message
-
-
-  ## Server Callbacks
 
   def init(ttl),
     do: {:ok, struct(State, initial_state(ttl) |> Map.put(:msg, ""))}
 
-  def handle_exec({:do_something, val}, from, state) do
-    Logger.debug "Doing #{val}"
-    events = [%{val: val}]
-    {:block, from, {:events, events}, state}
+
+  handle_cmd :do_something, val, metadata, fn
+    from, _, state ->
+      events = [%{val: val}]
+      {:block, from, {:events, events}, state}
   end
-  def handle_exec(:get_message, from, state) do
-    {:noblock, from, state.msg, state}
+
+  handle_cmd :message, fn
+    from, state ->
+      {:noblock, from, state.msg, state}
   end
+
 
   defp apply_event(%{val: val}, state),
     do: %{ state | msg: state.msg <> val }
@@ -48,7 +41,7 @@ defmodule Extreme.System.GenAggregateTest do
   end
 
   test "can commit active transaction", %{a: a} do
-    {:ok, transaction_id, _events, version} = Aggregate.do_something(a, "something")
+    {:ok, transaction_id, _events, version} = Aggregate.do_something(a, "something", [user: 123])
     :ok = Aggregate.commit a, transaction_id, version, version
     assert Aggregate.message(a) == "something"
   end

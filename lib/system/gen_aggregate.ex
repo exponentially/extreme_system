@@ -52,11 +52,41 @@ defmodule Extreme.System.GenAggregate do
   def  state_params,
     do: [:transaction, :ttl, :events, :buffer, :version]
 
+  defmacro handle_cmd(cmd, params, metadata \\ [], fun) do
+    quote do
+      def unquote(cmd)(server, unquote(params), unquote(metadata) \\ []),
+        do: exec server, {unquote(cmd), unquote(params), unquote(metadata)}
+    
+      def handle_exec({unquote(cmd), unquote(params), unquote(metadata)}, from, state) do
+        Logger.metadata unquote(metadata)
+        Logger.info  fn -> "Executing #{inspect unquote(cmd)} on #{inspect Map.get(state, :id)} with params" end
+        Logger.debug fn -> inspect unquote(params) end
+        result = unquote(fun).(from, unquote(params), state)
+        Logger.metadata []
+        result
+      end
+    end
+  end
+  defmacro handle_cmd(cmd, fun) do
+    quote do
+      def unquote(cmd)(server),
+        do: exec server, unquote(cmd)
+    
+      def handle_exec(unquote(cmd), from, state) do
+        Logger.info fn -> "Executing #{inspect unquote(cmd)} on #{inspect Map.get(state, :id)} without params" end
+        unquote(fun).(from, state)
+      end
+    end
+  end
+
+
   defmacro __using__(_) do
     quote do
-      use GenServer
-      alias Extreme.System.GenAggregate
-      #require Logger
+      use     GenServer
+      alias   Extreme.System.GenAggregate
+      import  Extreme.System.GenAggregate
+      require Extreme.System.GenAggregate
+      require Logger
 
       defp initial_state(ttl \\ 2_000),
         do: %{buffer: [], ttl: ttl, events: [], version: -1}
@@ -137,6 +167,12 @@ defmodule Extreme.System.GenAggregate do
       defp schedule_rollback(transaction, ttl) do 
         {:ok, _ref} = :timer.send_after ttl, self(), {:rollback, transaction}
       end
+
+      defp _ok(state, from),
+        do: {:noblock, from, {:ok, state.version}, state}
+        
+      defp _log(msg, metadata \\ [], level \\ :info),
+        do: Logger.log level, fn -> msg end, metadata
 
       defp apply_events([], _, state), do: state
       defp apply_events([event | tail], version, state) do
