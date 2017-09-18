@@ -147,7 +147,11 @@ defmodule Extreme.System.GenAggregate do
         case handle_exec(cmd, from, state) do
           {:block, from, {:events, events}, state} when is_list(events) ->
             schedule_rollback state.transaction, state.ttl
-            GenServer.reply from, {:ok, state.transaction, events, state.version}
+            GenServer.reply from, {:ok, state.transaction, events, state.version, :default}
+            {:noreply, %{state | events: events}}
+          {:block, from, {:events, events, response}, state} when is_list(events) ->
+            schedule_rollback state.transaction, state.ttl
+            GenServer.reply from, {:ok, state.transaction, events, state.version, response}
             {:noreply, %{state | events: events}}
           {:block, from, response, state} ->
             schedule_rollback state.transaction, state.ttl

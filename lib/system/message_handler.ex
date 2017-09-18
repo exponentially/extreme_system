@@ -51,9 +51,9 @@ defmodule Extreme.System.MessageHandler do
       defp with_new_aggregate(log_msg, cmd, id \\ nil, fun) do
         if log_msg, do: Logger.info fn -> log_msg end
         key = id || UUID.uuid1
-        with {:ok, pid}                          <- spawn_new(key),
-             {:ok, transaction, events, version} <- fun.({:ok, pid, key}),
-             {:ok, last_event}                   <- apply_changes(pid, key, transaction, events, version)
+        with {:ok, pid}                             <- spawn_new(key),
+             {:ok, transaction, events, version, _} <- fun.({:ok, pid, key}),
+             {:ok, last_event}                      <- apply_changes(pid, key, transaction, events, version)
              do
                {:created, key, last_event}
              else 
@@ -66,10 +66,10 @@ defmodule Extreme.System.MessageHandler do
 
       defp with_aggregate(log_msg, id, fun) do
         if log_msg, do: Logger.info fn -> log_msg end
-        with {:ok, pid}                          <- get_pid(id),
-             {:ok, transaction, events, version} <- fun.({:ok, pid})
+        with {:ok, pid}                                     <- get_pid(id),
+             {:ok, transaction, events, version, aggr_resp} <- fun.({:ok, pid})
              do 
-               apply_changes(pid, id, transaction, events, version)
+               _respond pid, id, transaction, events, version, aggr_resp
              else 
                any -> 
                  Logger.info fn -> "Nothing to commit: #{inspect any}" end
@@ -82,13 +82,24 @@ defmodule Extreme.System.MessageHandler do
         result = case get_pid(id) do
           {:ok, pid} ->
             case fun.({:ok, pid}) do
-              {:ok, transaction, events, version} ->
-                {:ok, fn -> apply_changes(pid, id, transaction, events, version) end}
+              {:ok, transaction, events, version, aggr_resp} ->
+                {:ok, fn -> _respond(pid, id, transaction, events, version, aggr_resp) end}
               any ->
                 Logger.info fn -> "Nothing to commit: #{inspect any}" end
                 any
             end
           other -> other
+        end
+      end
+
+      defp _respond(pid, id, transaction, events, version, aggr_resp) do
+        case apply_changes(pid, id, transaction, events, version) do
+          {:ok, _} = response ->
+            if aggr_resp == :default,
+              do:   response,
+              else: aggr_resp
+          response ->
+            response
         end
       end
 
