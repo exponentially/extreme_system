@@ -111,6 +111,29 @@ defmodule Extreme.System.GenAggregateTest do
     assert {:error, :wrong_transaction} = Aggregate.commit(a, transaction_id_3, -1, 2)
   end
 
+  test ":noblock response doesn't block further buffer execution, causing client to timeout" do
+    {:ok, a} = Aggregate.start_link
+    for n <- 1..3 do
+      spawn fn ->
+        {:ok, transaction_id, _events, version, _} = Aggregate.do_something(a, "#{n} ")
+        :timer.sleep 1_000
+        :ok = Aggregate.commit a, transaction_id, version, version + 1
+      end
+      :timer.sleep 10
+    end
+    spawn fn ->
+      assert Aggregate.message(a) == "1 2 3 "
+    end
+    :timer.sleep 10
+    spawn fn ->
+      {:ok, transaction_id, _events, version, _} = Aggregate.do_something(a, "last")
+      :ok = Aggregate.commit a, transaction_id, version, version + 1
+    end
+    :timer.sleep 10
+    assert Aggregate.message(a) == "1 2 3 last"
+  end
+
+
   defp assert_down(a, wait_time) do
     Process.flag :trap_exit, true
     ref = Process.monitor a

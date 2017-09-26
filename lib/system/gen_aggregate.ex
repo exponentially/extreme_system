@@ -104,22 +104,25 @@ defmodule Extreme.System.GenAggregate do
       def apply(pid, events), 
         do: GenServer.call(pid, {:apply_stream_events, events})
 
+
       def handle_call({:cmd, cmd}, from, %{buffer: [], transaction: nil}=state) do
         lock = make_ref()
         GenServer.cast self(), {:execute, {cmd, from}}
         {:noreply, %{state | transaction: lock}}
       end
       def handle_call({:cmd, cmd}, from, %{}=state) do
-        #Logger.debug "Buffering: #{inspect cmd}"
+        #Logger.debug fn -> "Buffering: #{inspect cmd}" end
+        #Logger.debug fn -> "State is: #{inspect state}" end
         buffer = [{cmd, from} | state.buffer]
         {:noreply, %{state | buffer: buffer}}
       end
+
       def handle_call({:commit, nil, _, _}, _from, state),
         do: {:reply, {:error, :nil_transaction}, state}
       def handle_call({:commit, _, version, _}, _from, %{version: current_version}=state) when version != current_version,
         do: {:reply, {:error, :wrong_version, current_version, version}, state}
       def handle_call({:commit, transaction, _, new_version}, _from, %{transaction: transaction}=state) do
-        #Logger.debug "Commiting: #{inspect transaction}"
+        #Logger.debug fn -> "Commiting: #{inspect transaction}" end
         state = apply_events state.events, new_version, state
         GenServer.cast self(), :process_buffer
         {:reply, :ok, %{state | transaction: nil, events: []}}
@@ -127,22 +130,23 @@ defmodule Extreme.System.GenAggregate do
       def handle_call({:commit, t1, _, _}, _from, %{transaction: transaction}=state) when t1 != transaction do 
         {:reply, {:error, :wrong_transaction}, state}
       end
+
       def handle_call({:apply_stream_events, events_stream}, _from, state) do
         state = Enum.reduce(events_stream, state, fn({event, event_number}, acc) -> apply_events([event], event_number, acc) end)
         {:reply, :ok, state}
       end
 
-
       def handle_cast(:process_buffer, %{buffer: []}=state), do: {:noreply, state}
       def handle_cast(:process_buffer, %{buffer: buffer, transaction: nil}=state) do
         lock = make_ref()
         {cmd, from} = List.last buffer
-        #Logger.debug "Processing buffered cmd: #{inspect cmd}"
+        #Logger.debug fn -> "Processing buffered cmd: #{inspect cmd}" end
         buffer = List.delete_at buffer, -1
         GenServer.cast self(), {:execute, {cmd, from}}
         {:noreply, %{state | buffer: buffer, transaction: lock}}
       end
       def handle_cast(:process_buffer, state), do: {:noreply, state}
+
       def handle_cast({:execute, {cmd, from}}, state) do
         case handle_exec(cmd, from, state) do
           {:block, from, {:events, events}, state} when is_list(events) ->
@@ -155,9 +159,11 @@ defmodule Extreme.System.GenAggregate do
             {:noreply, %{state | events: events}}
           {:block, from, response, state} ->
             schedule_rollback state.transaction, state.ttl
+            Logger.debug fn -> "WTH is response: #{inspect response}" end
             GenServer.reply from, response
             {:noreply, state}
           {:noblock, from, response, state} ->
+            GenServer.cast self(), :process_buffer
             GenServer.reply from, response
             {:noreply, %{state | transaction: nil}}
         end
@@ -168,9 +174,8 @@ defmodule Extreme.System.GenAggregate do
       def handle_info(_, state), 
         do: {:noreply, state}
 
-      defp schedule_rollback(transaction, ttl) do 
-        {:ok, _ref} = :timer.send_after ttl, self(), {:rollback, transaction}
-      end
+      defp schedule_rollback(transaction, ttl),
+        do: {:ok, _ref} = :timer.send_after ttl, self(), {:rollback, transaction}
 
       defp _ok(from, state),
         do: {:noblock, from, {:ok, state.version}, state}
