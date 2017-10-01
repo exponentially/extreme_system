@@ -48,13 +48,13 @@ defmodule Extreme.System.GenAggregateTest do
 
   test "can commit active transaction", %{a: a} do
     {:ok, transaction_id, _events, version, _} = Aggregate.do_something(a, "something", [user: 123])
-    :ok = Aggregate.commit a, transaction_id, version, version
+    {:ok, %{msg: "something"}} = Aggregate.commit a, transaction_id, version, version
     assert Aggregate.message(a) == "something"
   end
 
   test "can return customized response if everything is ok", %{a: a} do
     assert {:ok, transaction_id, _events, version, :customized_response} = Aggregate.do_with_customized_response(a, "cust")
-    :ok = Aggregate.commit a, transaction_id, version, version
+    {:ok, %{msg: "cust"}} = Aggregate.commit a, transaction_id, version, version
     assert Aggregate.message(a) == "cust"
   end
 
@@ -73,7 +73,7 @@ defmodule Extreme.System.GenAggregateTest do
       spawn fn ->
         {:ok, transaction_id_2, _events, version, _} = Aggregate.do_something(a, "#{n} ")
         :timer.sleep n * 100
-        :ok = Aggregate.commit a, transaction_id_2, version, version + 1
+        {:ok, _} = Aggregate.commit a, transaction_id_2, version, version + 1
       end
     end
     :timer.sleep 10
@@ -82,16 +82,16 @@ defmodule Extreme.System.GenAggregateTest do
       :timer.sleep 10
       spawn fn ->
         {:ok, transaction_id_2, _, version, _} = Aggregate.do_something(a, "#{n} ")
-        :ok = Aggregate.commit a, transaction_id_2, version, version + 1
+        {:ok, _} = Aggregate.commit a, transaction_id_2, version, version + 1
       end
     end
-    :ok = Aggregate.commit a, transaction_id_1, version, version + 1
+    {:ok, _} = Aggregate.commit a, transaction_id_1, version, version + 1
     assert Aggregate.message(a) == "1 2 3 4 5 else 6 7 8 9 "
   end
 
   test "timeout", %{a: a} do
     {:ok, transaction_id_1, _, version, _} = Aggregate.do_something(a, "1 ")
-    :ok = Aggregate.commit a, transaction_id_1, version, version
+    {:ok, _} = Aggregate.commit a, transaction_id_1, version, version
     assert Aggregate.message(a) == "1 "
 
     #should timeout after 2 sec
@@ -117,7 +117,7 @@ defmodule Extreme.System.GenAggregateTest do
       spawn fn ->
         {:ok, transaction_id, _events, version, _} = Aggregate.do_something(a, "#{n} ")
         :timer.sleep 1_000
-        :ok = Aggregate.commit a, transaction_id, version, version + 1
+        {:ok, _} = Aggregate.commit a, transaction_id, version, version + 1
       end
       :timer.sleep 10
     end
@@ -127,7 +127,7 @@ defmodule Extreme.System.GenAggregateTest do
     :timer.sleep 10
     spawn fn ->
       {:ok, transaction_id, _events, version, _} = Aggregate.do_something(a, "last")
-      :ok = Aggregate.commit a, transaction_id, version, version + 1
+      {:ok, _} = Aggregate.commit a, transaction_id, version, version + 1
     end
     :timer.sleep 10
     assert Aggregate.message(a) == "1 2 3 last"

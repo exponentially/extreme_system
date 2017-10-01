@@ -7,7 +7,7 @@ defmodule Extreme.System.GenAggregate do
       defmodule MyAggregate do
         use Extreme.System.GenAggregate
       
-        defmodule State, do: defstruct [:transaction, :ttl, :events, :buffer, :msg]
+        defmodule State, do: defstruct GenAggregate.state_params ++ [:msg]
       
         ## Client API
       
@@ -19,7 +19,11 @@ defmodule Extreme.System.GenAggregate do
       
         ## Server Callbacks
       
-        def init(ttl), do: {:ok, %State{buffer: [], msg: "", ttl: ttl}} 
+        def init(ttl) do
+          state = initial_state(ttl)
+                    |> Map.put(:msg, "")
+          {:ok, struct(State, state)}
+        end
 
         def handle_exec({:do_something, val}, from, state) do
           events = [%{val: val}]
@@ -38,9 +42,9 @@ defmodule Extreme.System.GenAggregate do
       end
 
     Use it then as:
-    {:ok, a} = MyAggregate.start_link
-    {:ok, transaction_id, _} = MyAggregate.do_something(a, "something")
-    :ok = MyAggregate.commit a, transaction_id
+    {:ok, a}                                           = MyAggregate.start_link
+    {:ok, transaction_id, _events, version, _response} = MyAggregate.do_something(a, "something")
+    {:ok, _new_state}                                  = MyAggregate.commit a, transaction_id
     MyAggregate.message(a)
     #=> "something"
   """
@@ -123,9 +127,10 @@ defmodule Extreme.System.GenAggregate do
         do: {:reply, {:error, :wrong_version, current_version, version}, state}
       def handle_call({:commit, transaction, _, new_version}, _from, %{transaction: transaction}=state) do
         #Logger.debug fn -> "Commiting: #{inspect transaction}" end
-        state = apply_events state.events, new_version, state
+        state     = apply_events state.events, new_version, state
+        new_state = Map.drop state, [:transaction, :ttl, :events, :buffer]
         GenServer.cast self(), :process_buffer
-        {:reply, :ok, %{state | transaction: nil, events: []}}
+        {:reply, {:ok, new_state}, %{state | transaction: nil, events: []}}
       end
       def handle_call({:commit, t1, _, _}, _from, %{transaction: transaction}=state) when t1 != transaction do 
         {:reply, {:error, :wrong_transaction}, state}

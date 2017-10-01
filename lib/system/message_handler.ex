@@ -133,6 +133,9 @@ defmodule Extreme.System.MessageHandler do
       def save_events(key, events, expected_version),
         do: EventStore.save_events(@es, {aggregate_mod(), key}, events, Logger.metadata, expected_version)
 
+      def save_state(id, state),
+        do: :ok
+
       @doc """
       Should return function that takes `aggregate_mod`, `id`, `spawn_new_fun` and returns {:ok, pid} or `anything`.
       If `anything` is returned, `with_aggregate` will return that value and won't run command on aggregate
@@ -156,15 +159,16 @@ defmodule Extreme.System.MessageHandler do
       end
 
       defp apply_changes(aggregate, _, transaction, [], expected_version) do
-        :ok = aggregate_mod().commit aggregate, transaction, expected_version, expected_version
+        {:ok, _} = aggregate_mod().commit aggregate, transaction, expected_version, expected_version
         Logger.info fn -> "No events to commit" end
         {:ok, expected_version}
       end
       defp apply_changes(aggregate, key, transaction, events, expected_version) do
         case save_events(key, events, expected_version) do
           {:ok, last_event_number} ->
-            :ok = aggregate_mod().commit aggregate, transaction, expected_version, last_event_number
+            {:ok, new_state} = aggregate_mod().commit aggregate, transaction, expected_version, last_event_number
             Logger.info fn ->  "Successfull commit of events. New aggregate version: #{last_event_number}" end
+            :ok = save_state key, new_state
             {:ok, last_event_number}
           error ->
             Logger.error fn -> "Error saving events #{inspect error}" end
@@ -173,7 +177,7 @@ defmodule Extreme.System.MessageHandler do
         end
       end
 
-      defoverridable [save_events: 3, when_pid_is_not_registered: 0]
+      defoverridable [save_events: 3, save_state: 2, when_pid_is_not_registered: 0]
     end
   end
 end
