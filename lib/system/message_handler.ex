@@ -123,7 +123,7 @@ defmodule Extreme.System.MessageHandler do
       end
 
       defp get_pid(id),
-        do: PidFacade.get_pid(@pid_facade, id, when_pid_is_not_registered())
+        do: PidFacade.get_pid(@pid_facade, id, when_pid_is_not_registered(), &aggregate_start_params/1)
 
       @doc """
       Should return {:ok, last_event_number} on success, otherwise aggregate will be terminated and
@@ -142,7 +142,9 @@ defmodule Extreme.System.MessageHandler do
       """
       def when_pid_is_not_registered, do: fn aggregate_mod, key, spawn_new_fun -> get_from_es(aggregate_mod, key, spawn_new_fun) end
 
-      defp spawn_new(key), do: PidFacade.spawn_new(@pid_facade, key)
+      defp spawn_new(key), do: PidFacade.spawn_new(@pid_facade, key, aggregate_start_params(key))
+
+      def  aggregate_start_params(_key), do: []
 
       defp get_from_es(aggregate_mod, key, spawn_new_fun) do
         case EventStore.has?(@es, aggregate_mod, key) do
@@ -177,7 +179,7 @@ defmodule Extreme.System.MessageHandler do
         end
       end
 
-      defoverridable [save_events: 3, save_state: 2, when_pid_is_not_registered: 0]
+      defoverridable [save_events: 3, save_state: 2, when_pid_is_not_registered: 0, aggregate_start_params: 1]
     end
   end
 end
