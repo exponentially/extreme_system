@@ -5,7 +5,7 @@ defmodule Extreme.System.MessageHandler do
         id_field = Keyword.get(unquote(opts), :id)
         id       = Map.get(params, id_field)
         execute_on_new(unquote(cmd), params, id)
-        |> @pipe_resp_thru.()
+        |> (@pipe_resp_thru || &__respond_on/1).()
       end
     end
   end
@@ -27,7 +27,7 @@ defmodule Extreme.System.MessageHandler do
             |> Map.fetch!(id_field)
             |> execute_on(unquote(cmd), params)
         end
-        |> @pipe_resp_thru.()
+        |> (@pipe_resp_thru || &__respond_on/1).()
       end
     end
   end
@@ -49,6 +49,7 @@ defmodule Extreme.System.MessageHandler do
       defp aggregate_mod,  do: @aggregate_mod
       defp prefix,         do: @prefix
 
+      defp __respond_on(response), do: response
 
       defp with_new_aggregate(log_msg, cmd, id \\ nil, fun) do
         if log_msg, do: Logger.info fn -> log_msg end
