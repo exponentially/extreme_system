@@ -118,9 +118,11 @@ defmodule Extreme.System.Facade do
       defp _cache_ttl(cmd, overrides),
         do: overrides[cmd] || @default_cache
 
+      @doc false
       def start_link(request_sup, cache, opts \\ []), 
         do: GenServer.start_link(__MODULE__, {request_sup, cache}, opts)
       
+      @doc false
       def init({request_sup, cache}) do 
         on_init()
         {:ok, %{request_sup: request_sup, cache: cache}}

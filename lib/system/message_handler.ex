@@ -1,8 +1,10 @@
 defmodule Extreme.System.MessageHandler do
-  defmacro proxy_to_new_aggregate(cmd) do
+  defmacro proxy_to_new_aggregate(cmd, opts \\ []) do
     quote do
       def unquote(cmd)(params) do
-        execute_on_new(unquote(cmd), params)
+        id_field = Keyword.get(unquote(opts), :id)
+        id       = Map.get(params, id_field)
+        execute_on_new(unquote(cmd), params, id)
         |> @pipe_resp_thru.()
       end
     end
@@ -125,25 +127,25 @@ defmodule Extreme.System.MessageHandler do
       defp get_pid(id),
         do: PidFacade.get_pid(@pid_facade, id, when_pid_is_not_registered(), &aggregate_start_params/1)
 
-      @doc """
-      Should return {:ok, last_event_number} on success, otherwise aggregate will be terminated and
-      that result will be returned to the caller
-      """
+      @doc false
+      # Should return {:ok, last_event_number} on success, otherwise aggregate will be terminated and
+      # that result will be returned to the caller
       def save_events(key, events, expected_version \\ -2)
       def save_events(key, events, expected_version),
         do: EventStore.save_events(@es, {aggregate_mod(), key}, events, Logger.metadata, expected_version)
 
+      @doc false
       def save_state(id, state),
         do: :ok
 
-      @doc """
-      Should return function that takes `aggregate_mod`, `id`, `spawn_new_fun` and returns {:ok, pid} or `anything`.
-      If `anything` is returned, `with_aggregate` will return that value and won't run command on aggregate
-      """
+      @doc false
+      # Should return function that takes `aggregate_mod`, `id`, `spawn_new_fun` and returns {:ok, pid} or `anything`.
+      # If `anything` is returned, `with_aggregate` will return that value and won't run command on aggregate
       def when_pid_is_not_registered, do: fn aggregate_mod, key, spawn_new_fun -> get_from_es(aggregate_mod, key, spawn_new_fun) end
 
       defp spawn_new(key), do: PidFacade.spawn_new(@pid_facade, key, aggregate_start_params(key))
 
+      @doc false
       def  aggregate_start_params(_key), do: []
 
       defp get_from_es(aggregate_mod, key, spawn_new_fun) do
