@@ -15,8 +15,8 @@ defmodule Extreme.System.EventStore do
     do: GenServer.call(server, {:has?, aggregate, id})
 
   def save_events(server, identifier, events, metadata \\ %{}, expected_version \\ -2)
-  def save_events(_, _, [], _, _),
-    do: :ok
+  def save_events(_, _, [], _, expected_version),
+    do: {:ok, expected_version}
   def save_events(server, {_aggregate, _id}=identifier, events, metadata, expected_version),
     do: GenServer.call server, {:save_events, {identifier, events, metadata, expected_version}}
 
