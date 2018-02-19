@@ -162,6 +162,7 @@ defmodule Extreme.System.Facade do
             {:missing, nil} -> #no request in cache
               #Logger.debug "We don't have cached result. Create queue of callers"
               Cachex.set! cache_state, hash, %{callers: [from], response: :pending}
+              Cachex.expire cache_state, hash, ttl
               in_task(state, from, fn ->
                 response = fun.()
                 #Logger.debug "Sending response: #{inspect response}"
@@ -172,6 +173,7 @@ defmodule Extreme.System.Facade do
             {:ok, %{callers: callers, response: :pending}} -> 
               #Logger.debug "Command is processing ... appending caller to queue"
               Cachex.set! cache_state, hash, %{callers: [from | callers], response: :pending}
+              Cachex.expire cache_state, hash, ttl
               {:noreply, state}
             {:ok, %{response: response}} ->
               #Logger.debug "We have response #{inspect response}"

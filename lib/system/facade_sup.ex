@@ -6,7 +6,7 @@ defmodule Extreme.System.FacadeSup do
 
   def init({facade_module, facade_name, opts}) do
     children = [
-      worker(     Cachex,          [cache_name(facade_name),                                []]),
+      worker(     Cachex,          [cache_name(facade_name),                                [ttl_interval: 10_000]]),
       supervisor( Task.Supervisor, [                                                        [name: request_sup_name(facade_name)]]),
       worker(     facade_module,   [request_sup_name(facade_name), cache_name(facade_name), Keyword.put(opts, :name, facade_name)]),
     ]
