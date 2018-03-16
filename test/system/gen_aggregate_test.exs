@@ -30,6 +30,12 @@ defmodule Aggregate do
       {:noblock, from, state.msg, state}
   end
 
+  handle_cmd :timeout, val, metadata, fn
+    from, _, state ->
+      :timer.sleep 500
+      {:noblock, from, state.msg, state}
+  end, 200
+
 
   defp apply_event(%{val: val}, state),
     do: %{ state | msg: state.msg <> val }
@@ -89,7 +95,13 @@ defmodule Extreme.System.GenAggregateTest do
     assert Aggregate.message(a) == "1 2 3 4 5 else 6 7 8 9 "
   end
 
-  test "timeout", %{a: a} do
+  test "exec timeout", %{a: a} do
+    spawn_link fn -> Aggregate.timeout(a, :whatever) end
+    Process.flag :trap_exit, true
+    assert_receive {:EXIT, _, {:timeout, {GenServer, :call, [^a, _, 200]}}}, 300
+  end
+
+  test "commit timeout", %{a: a} do
     {:ok, transaction_id_1, _, version, _} = Aggregate.do_something(a, "1 ")
     {:ok, _} = Aggregate.commit a, transaction_id_1, version, version
     assert Aggregate.message(a) == "1 "

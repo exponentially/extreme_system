@@ -56,10 +56,10 @@ defmodule Extreme.System.GenAggregate do
   def  state_params,
     do: [:transaction, :ttl, :events, :buffer, :version]
 
-  defmacro handle_cmd(cmd, params, metadata \\ [], fun) do
+  defmacro handle_cmd(cmd, params, metadata, fun, timeout \\ 5_000) do
     quote do
       def unquote(cmd)(server, unquote(params), unquote(metadata) \\ []),
-        do: exec server, {unquote(cmd), unquote(params), unquote(metadata)}
+        do: exec server, {unquote(cmd), unquote(params), unquote(metadata)}, unquote(timeout)
     
       def handle_exec({unquote(cmd), unquote(params), unquote(metadata)}, from, state) do
         Logger.metadata unquote(metadata)
@@ -71,10 +71,10 @@ defmodule Extreme.System.GenAggregate do
       end
     end
   end
-  defmacro handle_cmd(cmd, fun) do
+  defmacro handle_cmd(cmd, fun, timeout \\ 5_000) do
     quote do
       def unquote(cmd)(server),
-        do: exec server, unquote(cmd)
+        do: exec server, unquote(cmd), unquote(timeout)
     
       def handle_exec(unquote(cmd), from, state) do
         Logger.metadata []
@@ -99,8 +99,8 @@ defmodule Extreme.System.GenAggregate do
       def commit(pid, transaction, expected_version, new_version), 
         do: GenServer.call(pid, {:commit, transaction, expected_version, new_version})
 
-      def exec(pid, cmd), 
-        do: GenServer.call(pid, {:cmd, cmd})
+      def exec(pid, cmd, timeout \\ 5_000), 
+        do: GenServer.call(pid, {:cmd, cmd}, timeout)
 
       def reply(to, payload), 
         do: GenServer.reply to, payload
