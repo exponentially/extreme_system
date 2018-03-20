@@ -58,6 +58,19 @@ defmodule Extreme.System.GenAggregateTest do
     assert Aggregate.message(a) == "something"
   end
 
+  test "returns {:ok, state.version} if dry_run is set to true", %{a: a} do
+    assert Aggregate.message(a) == ""
+    assert {:ok, -1} = Aggregate.do_something(a, %{"key" => "something", "dry_run" => true}, [user: 123])
+    assert Aggregate.message(a) == ""
+  end
+
+  test "returns {:ok, events} if dry_run is set to :verbose", %{a: a} do
+    assert Aggregate.message(a) == ""
+    assert {:ok, [%{val: %{"key" => "something"}}]} = 
+           Aggregate.do_something(a, %{"key" => "something", "dry_run" => :verbose}, [user: 123])
+    assert Aggregate.message(a) == ""
+  end
+
   test "can return customized response if everything is ok", %{a: a} do
     assert {:ok, transaction_id, _events, version, :customized_response} = Aggregate.do_with_customized_response(a, "cust")
     {:ok, %{msg: "cust"}} = Aggregate.commit a, transaction_id, version, version
