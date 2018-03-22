@@ -155,7 +155,7 @@ defmodule Extreme.System.GenAggregate do
       def handle_cast({:execute, {cmd, from}}, state) do
         cmd
         |> handle_exec(from, state)
-        |> _respond(_dry_run_option(cmd), state)
+        |> _respond(_dry_run_option(cmd))
       end
 
       defp _dry_run_option({_, {_id, %{"dry_run" => option}}, _}),
@@ -165,53 +165,53 @@ defmodule Extreme.System.GenAggregate do
       defp _dry_run_option(_),
         do: false
 
-      defp _respond(response, dry_run_option, state)
-      defp _respond({:block, from, {:events, events}, state}, :verbose, state) 
+      defp _respond(response, dry_run_option)
+      defp _respond({:block, from, {:events, events}, state}, :verbose) 
         when is_list(events) do
           GenServer.cast self(), :process_buffer
           GenServer.reply from, {:ok, events}
           {:noreply, %{state | transaction: nil}}
       end
-      defp _respond({:block, from, {:events, events}, state}, true, state) 
+      defp _respond({:block, from, {:events, events}, state}, true) 
         when is_list(events) do
           GenServer.cast self(), :process_buffer
           GenServer.reply from, {:ok, state.version}
           {:noreply, %{state | transaction: nil}}
       end
-      defp _respond({:block, from, {:events, events}, state}, _, state) 
+      defp _respond({:block, from, {:events, events}, state}, _) 
         when is_list(events) do
           schedule_rollback state.transaction, state.ttl
           GenServer.reply from, {:ok, state.transaction, events, state.version, :default}
           {:noreply, %{state | events: events}}
       end
 
-      defp _respond({:block, from, {:events, events, _}, state}, :verbose, state) 
+      defp _respond({:block, from, {:events, events, _}, state}, :verbose) 
         when is_list(events) do
           GenServer.cast self(), :process_buffer
           GenServer.reply from, {:ok, events}
           {:noreply, %{state | transaction: nil}}
       end
-      defp _respond({:block, from, {:events, events, _}, state}, true, state) 
+      defp _respond({:block, from, {:events, events, _}, state}, true) 
         when is_list(events) do
           GenServer.cast self(), :process_buffer
           GenServer.reply from, {:ok, state.version}
           {:noreply, %{state | transaction: nil}}
       end
-      defp _respond({:block, from, {:events, events, response}, state}, _, state) 
+      defp _respond({:block, from, {:events, events, response}, state}, _) 
         when is_list(events) do
           schedule_rollback state.transaction, state.ttl
           GenServer.reply from, {:ok, state.transaction, events, state.version, response}
           {:noreply, %{state | events: events}}
       end
 
-      defp _respond({:block, from, response, state}, _, state) do
+      defp _respond({:block, from, response, state}, _) do
         schedule_rollback state.transaction, state.ttl
         Logger.debug fn -> "WTH is response: #{inspect response}" end
         GenServer.reply from, response
         {:noreply, state}
       end
 
-      defp _respond({:noblock, from, response, state}, _, state) do
+      defp _respond({:noblock, from, response, state}, _) do
         GenServer.cast self(), :process_buffer
         GenServer.reply from, response
         {:noreply, %{state | transaction: nil}}
