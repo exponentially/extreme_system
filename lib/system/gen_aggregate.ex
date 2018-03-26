@@ -108,6 +108,11 @@ defmodule Extreme.System.GenAggregate do
       def apply(pid, events), 
         do: GenServer.call(pid, {:apply_stream_events, events})
 
+      def state_after_mutation(events, state) do
+        events
+        |> apply_events(:whatever_version, state)
+      end
+
 
       def handle_call({:cmd, cmd}, from, %{buffer: [], transaction: nil}=state) do
         lock = make_ref()
