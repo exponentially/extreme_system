@@ -10,6 +10,22 @@ defmodule Extreme.System.MessageHandler do
     end
   end
 
+  defmacro proxy_to_maybe_new_aggregate(cmd, opts \\ []) do
+    quote do
+      def unquote(cmd)(params) do
+        id_field = Keyword.get(unquote(opts), :id, "id")
+        id       = Map.fetch!(params, id_field)
+        case get_pid(id) do
+          {:ok, _} ->
+            execute_on(id, unquote(cmd), params)
+          _        ->
+            execute_on_new(unquote(cmd), params, id)
+        end
+        |> (@pipe_resp_thru || &__respond_on/1).()
+      end
+    end
+  end
+
   defmacro proxy_to_aggregate(cmd, opts \\ []) do
     quote do
       def unquote(cmd)(params) do
@@ -109,7 +125,7 @@ defmodule Extreme.System.MessageHandler do
 
       defp execute_on_new(cmd, params, id \\ nil) do
         with_new_aggregate nil, cmd, id, fn {:ok, pid, id} ->
-          apply aggregate_mod(), cmd, [pid, {id, params}, Logger.metadata]
+          apply aggregate_mod(), cmd, [pid, {id, params}, Logger.metadata ++ [aggr: id]]
         end
       end
 
@@ -121,7 +137,7 @@ defmodule Extreme.System.MessageHandler do
 
       defp execute_on(id, cmd, params) do
         with_aggregate nil, id, fn {:ok, pid} ->
-          apply aggregate_mod(), cmd, [pid, params, Logger.metadata]
+          apply aggregate_mod(), cmd, [pid, params, Logger.metadata ++ [aggr: id]]
         end
       end
 
