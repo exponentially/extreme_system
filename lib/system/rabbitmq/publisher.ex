@@ -1,6 +1,6 @@
 defmodule Extreme.System.RabbitMQ.Publisher do
-  use GenServer
-  use AMQP
+  use     GenServer
+  use     AMQP
   require Logger
 
   ## Client API
@@ -21,7 +21,7 @@ defmodule Extreme.System.RabbitMQ.Publisher do
     targets = targets
               |> Enum.map(&declare(connection, &1))
               |> Enum.into(%{})
-    Logger.info "Declared push targets: #{targets |> Map.keys |> Enum.join(", ")}"
+    Logger.info fn -> "Declared push targets: #{targets |> Map.keys |> Enum.join(", ")}" end
     {:ok, %{targets: targets}}
   end
 
@@ -59,8 +59,8 @@ defmodule Extreme.System.RabbitMQ.Publisher do
   defp _publish(route, command, metadata, chan, exchange \\ "") do
     metadata = Enum.into metadata, []
     Logger.metadata metadata
-    Logger.info "Publishing to #{exchange} exchange on route #{route}"
-    Logger.debug inspect command
+    Logger.info  fn -> "Publishing to #{exchange} exchange on route #{route}" end
+    Logger.debug fn -> inspect command end
     :ok = Basic.publish chan, exchange, route, command, headers: metadata
     Logger.metadata []
   end

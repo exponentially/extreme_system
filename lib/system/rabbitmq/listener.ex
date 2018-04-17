@@ -69,15 +69,17 @@ defmodule Extreme.System.RabbitMQ.Listener do
 
   defp _consume(route, payload, headers, redelivered?, ack, nack, retry, event_processor) do
     Logger.metadata headers
-    case event_processor.process(route, payload, [redelivered?: redelivered?]) do
+    case event_processor.process(route, payload, [redelivered?: redelivered?, ack: ack, nack: nack, retry: retry, listener: self()]) do
       :ok             -> 
-        Logger.debug "Acking message"
+        Logger.debug fn -> "Acking message" end
         :ok = ack.()
       {:error, :discard_message} -> 
-        Logger.debug "Nacking message"
+        Logger.debug fn -> "Nacking message" end
         :ok = nack.()
+      :accepted       ->
+        Logger.debug fn -> "Processor will ack/nack message. We have to move on..." end
       _               -> 
-        Logger.debug "Returning message for redelivery"
+        Logger.debug fn -> "Returning message for redelivery" end
         :ok = retry.()
     end
     Logger.metadata []
