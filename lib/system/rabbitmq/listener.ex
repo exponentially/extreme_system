@@ -1,18 +1,19 @@
 defmodule Extreme.System.RabbitMQ.Listener do
-  use GenServer
-  use AMQP
+  alias   Extreme.System.RabbitMQ.ChannelManager
+  use     GenServer
+  use     AMQP
   require Logger
 
   ### Client API
 
-  def start_link(connection, definition, opts) when is_map(definition), 
-    do: GenServer.start_link __MODULE__, {connection, definition}, opts
+  def start_link(channel_manager, listener_name, definition, opts) when is_map(definition),
+    do: GenServer.start_link __MODULE__, {channel_manager, listener_name, definition}, opts
 
 
   ### Server Callbacks
 
-  def init({connection, definition}) do
-    {:ok, chan}         = Channel.open connection
+  def init({channel_manager, listener_name, definition}) do
+    chan                = ChannelManager.get_channel channel_manager, listener_name
     :ok                 = _set_queue chan, definition
     {:ok, consumer_tag} = Basic.consume(chan, definition.queue.name)
     {:ok, %{channel: chan, consumer_tag: consumer_tag, processor: definition.event_processor, status: :receiving}}
