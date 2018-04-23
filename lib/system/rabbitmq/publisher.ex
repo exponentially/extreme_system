@@ -1,12 +1,13 @@
 defmodule Extreme.System.RabbitMQ.Publisher do
-  use GenServer
-  use AMQP
+  alias   Extreme.System.RabbitMQ.ChannelManager
+  use     GenServer
+  use     AMQP
   require Logger
 
   ## Client API
 
-  def start_link(connection, targets, opts) when is_list(targets), 
-    do: GenServer.start_link __MODULE__, {connection, targets}, opts
+  def start_link(channel_manager, publisher_name, targets, opts) when is_list(targets),
+    do: GenServer.start_link __MODULE__, {channel_manager, publisher_name, targets}, opts
 
   def publish(server, command, metadata \\ [])
   def publish(server, {:exchange, name, route, payload}, metadata),
@@ -17,11 +18,11 @@ defmodule Extreme.System.RabbitMQ.Publisher do
 
   ## Server Callbacks
 
-  def init({connection, targets}) do
+  def init({channel_manager, publisher_name, targets}) do
     targets = targets
-              |> Enum.map(&declare(connection, &1))
+              |> Enum.map(&declare(channel_manager, publisher_name, &1))
               |> Enum.into(%{})
-    Logger.info "Declared push targets: #{targets |> Map.keys |> Enum.join(", ")}"
+    Logger.info fn -> "Declared push targets: #{targets |> Map.keys |> Enum.join(", ")}" end
     {:ok, %{targets: targets}}
   end
 
@@ -42,25 +43,24 @@ defmodule Extreme.System.RabbitMQ.Publisher do
     {:reply, response, state}
   end
 
-
-  defp declare(connection, {:exchange, %{name: name}=definition}) do
-    {:ok, chan} = Channel.open connection
+  defp declare(channel_manager, publisher_name, {:exchange, %{name: name}=definition}) do
+    chan        = ChannelManager.get_channel channel_manager, publisher_name, "exchange:#{name}"
     if definition[:options],
       do: :ok   = Exchange.declare chan, name, definition.type, definition.options
     {"exchange:" <> name, chan}
   end
-  defp declare(connection, {:queue, %{name: name}=definition}) do
-    {:ok, chan}            = Channel.open connection
+  defp declare(channel_manager, publisher_name, {:queue, %{name: name}=definition}) do
+    chan                          = ChannelManager.get_channel channel_manager, publisher_name, "queue:#{name}"
     if definition[:options],
-      do: {:ok, %{queue: ^name}} = Queue.declare chan, name, definition.options
+      do: {:ok, %{queue: ^name}}  = Queue.declare chan, name, definition.options
     {"queue:" <> name, chan}
   end
 
   defp _publish(route, command, metadata, chan, exchange \\ "") do
     metadata = Enum.into metadata, []
     Logger.metadata metadata
-    Logger.info "Publishing to #{exchange} exchange on route #{route}"
-    Logger.debug inspect command
+    Logger.info  fn -> "Publishing to #{exchange} exchange on route #{route}" end
+    Logger.debug fn -> inspect command end
     :ok = Basic.publish chan, exchange, route, command, headers: metadata
     Logger.metadata []
   end

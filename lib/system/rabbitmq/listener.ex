@@ -1,18 +1,19 @@
 defmodule Extreme.System.RabbitMQ.Listener do
-  use GenServer
-  use AMQP
+  alias   Extreme.System.RabbitMQ.ChannelManager
+  use     GenServer
+  use     AMQP
   require Logger
 
   ### Client API
 
-  def start_link(connection, definition, opts) when is_map(definition), 
-    do: GenServer.start_link __MODULE__, {connection, definition}, opts
+  def start_link(channel_manager, listener_name, definition, opts) when is_map(definition),
+    do: GenServer.start_link __MODULE__, {channel_manager, listener_name, definition}, opts
 
 
   ### Server Callbacks
 
-  def init({connection, definition}) do
-    {:ok, chan}         = Channel.open connection
+  def init({channel_manager, listener_name, definition}) do
+    chan                = ChannelManager.get_channel channel_manager, listener_name
     :ok                 = _set_queue chan, definition
     {:ok, consumer_tag} = Basic.consume(chan, definition.queue.name)
     {:ok, %{channel: chan, consumer_tag: consumer_tag, processor: definition.event_processor, status: :receiving}}
@@ -22,7 +23,7 @@ defmodule Extreme.System.RabbitMQ.Listener do
     q      = definition.queue
     q_name = q.name
     if q[:qos_opts],
-      do: :ok                      = Basic.qos        chan, q.qos_opts
+      do: :ok                      = Basic.qos     chan, q.qos_opts
     if q[:declare_opts],
       do: {:ok, %{queue: ^q_name}} = Queue.declare chan, q.name, q.declare_opts
     if x = definition[:exchange] do
@@ -53,13 +54,14 @@ defmodule Extreme.System.RabbitMQ.Listener do
     consume route, state.channel, tag, body, opts[:headers], state.processor, redelivered?
     {:noreply, state}
   end
+  def handle_info(_, state), do: {:noreply, state}
 
   defp consume(route, channel, tag, body, headers, event_processor, redelivered?) do
     ack     = fn -> Basic.ack(channel, tag, [])end
     nack    = fn -> Basic.reject(channel, tag, requeue: false) end
     retry   = fn -> Basic.reject(channel, tag, requeue: true) end
     headers = if is_list(headers) do
-      Enum.reduce(headers, %{}, fn({k, _, v}, acc) -> Map.put(acc, String.to_existing_atom(k), v) end)
+      Enum.reduce(headers, %{}, fn({k, _, v}, acc) -> Map.put(acc, String.to_atom(k), v) end)
     else
       %{}
     end
@@ -68,15 +70,17 @@ defmodule Extreme.System.RabbitMQ.Listener do
 
   defp _consume(route, payload, headers, redelivered?, ack, nack, retry, event_processor) do
     Logger.metadata headers
-    case event_processor.process(route, payload, [redelivered?: redelivered?]) do
+    case event_processor.process(route, payload, [redelivered?: redelivered?, ack: ack, nack: nack, retry: retry, listener: self()]) do
       :ok             -> 
-        Logger.debug "Acking message"
+        Logger.debug fn -> "Acking message" end
         :ok = ack.()
       {:error, :discard_message} -> 
-        Logger.debug "Nacking message"
+        Logger.debug fn -> "Nacking message" end
         :ok = nack.()
+      :accepted       ->
+        Logger.debug fn -> "Processor will ack/nack message. We have to move on..." end
       _               -> 
-        Logger.debug "Returning message for redelivery"
+        Logger.debug fn -> "Returning message for redelivery" end
         :ok = retry.()
     end
     Logger.metadata []

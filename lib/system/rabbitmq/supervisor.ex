@@ -75,10 +75,12 @@ defmodule Extreme.System.RabbitMQ.Supervisor do
 
   def init({prefix, bus_settings, configuration}) do
     connection_name = String.to_atom(prefix <> ".Connection")
+    channel_manager = String.to_atom(prefix <> ".ChannelManager")
     consumers_name  = String.to_atom(prefix <> ".Consumers")
     children = [
-      worker(     Extreme.System.RabbitMQ.Connection, [bus_settings,                   [name: connection_name]]),
-      supervisor( Extreme.System.RabbitMQ.Consumers,  [connection_name, configuration, [name: consumers_name]])
+      worker(     Extreme.System.RabbitMQ.Connection,     [bus_settings,                   [name: connection_name]]),
+      worker(     Extreme.System.RabbitMQ.ChannelManager, [connection_name,                [name: channel_manager]]),
+      supervisor( Extreme.System.RabbitMQ.Consumers,      [channel_manager, configuration, [name: consumers_name]]),
     ]
 
     supervise children, strategy: :rest_for_one
