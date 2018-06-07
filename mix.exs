@@ -29,7 +29,7 @@ defmodule Extreme.System.Mixfile do
     [
       {:extreme, "~> 0.10.0"},
       {:cachex, "~> 2.1"},
-      {:amqp,    "~> 0.1.4 or ~> 0.2.2"},
+      {:amqp,    "~> 0.1.4 or ~> 0.2.2 or ~> 0.3.1"},
       {:ex_doc, ">= 0.11.4", only: [:dev]},
       {:earmark, ">= 0.0.0", only: [:dev]},
       {:inch_ex, ">= 0.0.0", only: :docs},
