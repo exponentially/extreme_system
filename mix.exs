@@ -3,7 +3,7 @@ defmodule Extreme.System.Mixfile do
 
   def project do
     [app: :extreme_system,
-     version: "0.2.12",
+     version: "0.2.13",
      elixir: "~> 1.3.0 or ~> 1.4.0 or ~> 1.5.0 or ~> 1.6.0",
      source_url: "https://github.com/exponentially/extreme_system",
      description: """
@@ -27,12 +27,12 @@ defmodule Extreme.System.Mixfile do
 
   defp deps do
     [
-      {:extreme, "~> 0.10.0"},
+      {:extreme, "~> 0.10"},
       {:cachex, "~> 2.1"},
       {:amqp,    "~> 0.1.4 or ~> 0.2.2 or ~> 0.3.1"},
-      {:ex_doc, ">= 0.11.4", only: [:dev]},
-      {:earmark, ">= 0.0.0", only: [:dev]},
-      {:inch_ex, ">= 0.0.0", only: :docs},
+      {:ex_doc, ">= 0.11.4", only: :dev},
+      {:earmark, ">= 0.0.0", only: :dev},
+      {:inch_ex, ">= 0.0.0", only: :dev},
       {:excoveralls, "~> 0.6", only: :test},
     ]
   end
