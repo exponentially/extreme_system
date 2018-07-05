@@ -10,15 +10,6 @@ If [available in Hex](https://hex.pm/docs/publish), the package can be installed
 
     ```elixir
     def deps do
-      [{:extreme_system, "~> 0.0.6"}]
+      [{:extreme_system, "~> 0.2.14"}]
     end
     ```
-
-  2. Ensure `extreme_system` is started before your application:
-
-    ```elixir
-    def application do
-      [applications: [:extreme_system]]
-    end
-    ```
-
