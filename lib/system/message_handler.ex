@@ -147,6 +147,11 @@ defmodule Extreme.System.MessageHandler do
       defp exit_process(id, reason \\ :normal),
         do: PidFacade.exit_process(@pid_facade, id, reason)
 
+      defp delete_stream(key, soft_or_hard, expected_version \\ -2) when soft_or_hard in ~w(soft hard)a do
+        hard_delete? = soft_or_hard == :hard
+        EventStore.delete_stream(@es, {aggregate_mod(), key}, hard_delete?, expected_version)
+      end
+
       @doc false
       # Should return {:ok, last_event_number} on success, otherwise aggregate will be terminated and
       # that result will be returned to the caller

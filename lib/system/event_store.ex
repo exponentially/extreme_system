@@ -23,6 +23,9 @@ defmodule Extreme.System.EventStore do
   def stream_events(server, {_aggregate, _id}=identifier, starting_event \\ 0, per_page \\ 4096),
     do: GenServer.call server, {:stream_events, identifier, starting_event, per_page}
 
+  def delete_stream(server, {_aggregate, _id}=identifier, hard_delete?, expected_version),
+    do: GenServer.call server, {:delete_stream, identifier, hard_delete?, expected_version}
+
 
   ## Server Callbacks
 
@@ -59,6 +62,15 @@ defmodule Extreme.System.EventStore do
     stream = stream_name state.config, identifier
     events = get_stream_events state.extreme, stream, start_version, per_page
     {:reply, events, state}
+  end
+
+  def handle_call({:delete_stream, identifier, hard_delete?, expected_version}, _from, state) do
+    stream = stream_name state.config, identifier
+    response = case Extreme.execute(state.extreme, delete_stream(stream, hard_delete?, expected_version)) do
+      {:ok, _} -> :ok
+      {:error, :NoStream, _} -> :ok
+    end
+    {:reply, response, state}
   end
          
   defp get_stream_events(extreme, stream, start_at, per_page) do
@@ -123,6 +135,15 @@ defmodule Extreme.System.EventStore do
      require_master: false
      )
    end
+
+  defp delete_stream(stream, hard_delete?, expected_version) do
+    ExMsg.DeleteStream.new(
+      event_stream_id: stream,
+      expected_version: expected_version,
+      require_master: false,
+      hard_delete: hard_delete?
+    )
+  end
      #
      #      defoverridable [stream_name: 1]
 end
