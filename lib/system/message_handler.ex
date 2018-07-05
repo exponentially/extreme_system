@@ -144,6 +144,9 @@ defmodule Extreme.System.MessageHandler do
       defp get_pid(id),
         do: PidFacade.get_pid(@pid_facade, id, when_pid_is_not_registered(), &aggregate_start_params/1)
 
+      defp exit_process(id, reason \\ :normal),
+        do: PidFacade.exit_process(@pid_facade, id, reason)
+
       @doc false
       # Should return {:ok, last_event_number} on success, otherwise aggregate will be terminated and
       # that result will be returned to the caller
