@@ -9,11 +9,8 @@ defmodule Extreme.System.Application do
       def start(type, _args) do
         Logger.info "Starting #{inspect __MODULE__} in #{inspect type} mode"
         nodes = Application.get_env(:extreme_system, :nodes)
-        result = case connect_to_nodes(nodes) do
-          :ok    -> _start()
-          :error -> {:error, :cant_connect_to_cluster}
-        end
-        case result do
+        connect_to_nodes(nodes)
+        case _start() do
           {:ok, pid} when is_pid(pid) -> {:ok, pid}
           {:ok, opts} ->
             children = opts[:children]
