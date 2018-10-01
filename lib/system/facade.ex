@@ -2,7 +2,7 @@ defmodule Extreme.System.Facade do
   @moduledoc """
       defmodule MyFacade do
         use     Extreme.System.Facade
-      
+
         route :do_something,      MyController          # calls MyController.do_something(params)
         route :do_something_else, {MyController, :else} # calls MyController.else(params)
 
@@ -29,7 +29,7 @@ defmodule Extreme.System.Facade do
         supervisor(Task.Supervisor, [[name: @request_sup]]),
         worker(MyFacade, [@request_sup, [name: {:global, MyFacade}]]),
       ]
-      
+
       pid = :global.whereis_name MyFacade
       cmd1 = {:do_something, %{"lat" => "21", "long" => "21"}}
       cmd2 = {:do_something_else, %{"lat" => "21", "long" => "21"}, [req_id: "1231231"]}
@@ -109,7 +109,7 @@ defmodule Extreme.System.Facade do
 
       @default_cache   unquote(opts[:default_cache]   || :no_cache)
       @cache_overrides unquote(opts[:cache_overrides] || [])
-      
+
       defp cache_ttl(cmd),
         do: _cache_ttl(cmd, @cache_overrides)
 
@@ -119,11 +119,11 @@ defmodule Extreme.System.Facade do
         do: overrides[cmd] || @default_cache
 
       @doc false
-      def start_link(request_sup, cache, opts \\ []), 
+      def start_link(request_sup, cache, opts \\ []),
         do: GenServer.start_link(__MODULE__, {request_sup, cache}, opts)
-      
+
       @doc false
-      def init({request_sup, cache}) do 
+      def init({request_sup, cache}) do
         on_init()
         {:ok, %{request_sup: request_sup, cache: cache}}
       end
@@ -133,7 +133,7 @@ defmodule Extreme.System.Facade do
           case Cachex.get(cache_state, hash) do
             {:missing, nil} -> #no request in cache
               Logger.warn "We don't have cached callers for this request anymore"
-            {:ok, %{callers: callers, response: :pending}} -> 
+            {:ok, %{callers: callers, response: :pending}} ->
               respond_to callers, response
               #Logger.debug "Setting expiration time to #{inspect ttl}"
               Cachex.set! cache_state, hash, %{callers: [], response: response}
@@ -145,7 +145,7 @@ defmodule Extreme.System.Facade do
         {:noreply, state}
       end
 
-      defp respond_to([], response), 
+      defp respond_to([], response),
         do: :ok
       defp respond_to([caller | others], response) do
         #Logger.debug "Responding to caller #{inspect caller} with #{inspect response}"
@@ -159,10 +159,9 @@ defmodule Extreme.System.Facade do
         facade = self()
         Cachex.transaction!(state.cache, [hash], fn(cache_state) ->
           case Cachex.get(cache_state, hash) do
-            {:missing, nil} -> #no request in cache
+            {:ok, nil} -> #no request in cache
               #Logger.debug "We don't have cached result. Create queue of callers"
-              Cachex.set! cache_state, hash, %{callers: [from], response: :pending}
-              Cachex.expire cache_state, hash, ttl
+              Cachex.put! cache_state, hash, %{callers: [from], response: :pending}, [ttl: ttl]
               in_task(state, from, fn ->
                 response = fun.()
                 #Logger.debug "Sending response: #{inspect response}"
@@ -170,10 +169,9 @@ defmodule Extreme.System.Facade do
                 response
               end)
               {:noreply, state}
-            {:ok, %{callers: callers, response: :pending}} -> 
+            {:ok, %{callers: callers, response: :pending}} ->
               #Logger.debug "Command is processing ... appending caller to queue"
-              Cachex.set! cache_state, hash, %{callers: [from | callers], response: :pending}
-              Cachex.expire cache_state, hash, ttl
+              Cachex.put! cache_state, hash, %{callers: [from | callers], response: :pending}, [ttl: ttl]
               {:noreply, state}
             {:ok, %{response: response}} ->
               #Logger.debug "We have response #{inspect response}"
