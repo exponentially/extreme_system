@@ -1,12 +1,13 @@
 defmodule Extreme.System.FacadeSup do
   use Supervisor
+  import Cachex.Spec
 
-  def start_link(facade_module, facade_name, opts \\ []), 
+  def start_link(facade_module, facade_name, opts \\ []),
     do: Supervisor.start_link __MODULE__, {facade_module, facade_name, opts}, name: name(facade_name)
 
   def init({facade_module, facade_name, opts}) do
     children = [
-      worker(     Cachex,          [cache_name(facade_name),                                [ttl_interval: 10_000]]),
+      worker(     Cachex,          [cache_name(facade_name),                                [expiration: expiration(interval: 10_000)]]),
       supervisor( Task.Supervisor, [                                                        [name: request_sup_name(facade_name)]]),
       worker(     facade_module,   [request_sup_name(facade_name), cache_name(facade_name), Keyword.put(opts, :name, facade_name)]),
     ]
