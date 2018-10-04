@@ -2,7 +2,7 @@
 
 ## Aggregates
 
-Aggregates are loaded into memory on demand, meaning that once command is dispatched to aggregate.
+Aggregates are loaded into memory on demand, meaning once the command is dispatched to aggregate.
 
 1. First, aggregates are created by using `Extreme.System.GenAggregate`. Here is an example of an aggregate:
 
@@ -12,8 +12,8 @@ defmodule ExtremeSystem.Example.Users.Aggregates.User do
   alias   ExtremeSystem.Example.Events, as: Event
   import  Ecto.Changeset
 
-  defmodule State, 
-    do: defstruct GenAggregate.state_params ++ 
+  defmodule State,
+    do: defstruct GenAggregate.state_params ++
         [:id, :name]
 
 
@@ -82,12 +82,12 @@ defmodule ExtremeSystem.Example.Users.Aggregates.User do
   ### Apply events
 
   defp apply_event(%Event.User.Created{}=event, state) do
-    %State{state| 
+    %State{state|
       id: event.id
     }
   end
   defp apply_event(%Event.User.ProfileSet{}=event, state) do
-    %State{state| 
+    %State{state|
       name: event.name
     }
   end
@@ -95,7 +95,7 @@ defmodule ExtremeSystem.Example.Users.Aggregates.User do
 end
 ```
 
-2. Next, we need to register aggregates with a scheduler. We make use of `Extreme.System.CommandConfiguration`:
+2. Next, we need to register aggregates with a scheduler, ie. to associate an aggregate with an event stream name. We make use of `Extreme.System.CommandConfiguration`:
 
 ```
 defmodule ExtremeSystem.Example.Users.CommandConfiguration do
@@ -105,7 +105,7 @@ defmodule ExtremeSystem.Example.Users.CommandConfiguration do
 end
 ```
 
-3. Next we need to create a message handler, that will dispatch commands to appropriate aggregates. For this we use `Extreme.System.MessageHandler`. To sent a message to an existing aggregate use `with_aggregate`, while to send a message to a new aggregate (e.g. creation) we use `with_new_aggregate`. The latter assumes there is at least one event persisted in EventStore that is related to your aggregate otherwise you will receive an error:
+3. Next we need to create a message handler, that will dispatch commands to appropriate aggregates. For this we use `Extreme.System.MessageHandler`. To send a message to an existing aggregate we use `with_aggregate`, while to send a message to a new aggregate (e.g. creation) we use `with_new_aggregate`. The former assumes there is at least one event persisted in EventStore that is related to your aggregate otherwise you will receive an error:
 
 ```
 defmodule ExtremeSystem.Example.MessageHandlers.Users do
