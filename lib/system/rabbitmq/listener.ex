@@ -1,22 +1,29 @@
 defmodule Extreme.System.RabbitMQ.Listener do
-  alias   Extreme.System.RabbitMQ.ChannelManager
+  alias   Extreme.System.RabbitMQ.{ChannelManager, ListenerMonitor}
   use     GenServer
   use     AMQP
   require Logger
 
   ### Client API
 
-  def start_link(channel_manager, listener_name, definition, opts) when is_map(definition),
-    do: GenServer.start_link __MODULE__, {channel_manager, listener_name, definition}, opts
+  def start_link(channel_manager, listener_monitor, listener_name, definition, opts) when is_map(definition),
+    do: GenServer.start_link __MODULE__, {channel_manager, listener_monitor, listener_name, definition}, opts
 
 
   ### Server Callbacks
 
-  def init({channel_manager, listener_name, definition}) do
+  def init({channel_manager, listener_monitor, listener_name, definition}) do
     chan                = ChannelManager.get_channel channel_manager, listener_name
     :ok                 = _set_queue chan, definition
     {:ok, consumer_tag} = Basic.consume(chan, definition.queue.name)
-    {:ok, %{channel: chan, consumer_tag: consumer_tag, processor: definition.event_processor, status: :receiving}}
+    {:ok, %{
+      channel: chan,
+      consumer_tag: consumer_tag,
+      processor: definition.event_processor,
+      status: :receiving,
+      name: listener_name,
+      monitor: listener_monitor
+    }}
   end
 
   defp _set_queue(chan, definition) do
@@ -51,12 +58,12 @@ defmodule Extreme.System.RabbitMQ.Listener do
     {:noreply, state}
   end
   def handle_info({:basic_deliver, body, %{delivery_tag: tag, routing_key: route, redelivered: redelivered?}=opts}, state) do
-    consume route, state.channel, tag, body, opts[:headers], state.processor, redelivered?
+    consume route, state.channel, tag, body, opts[:headers], state.processor, redelivered?, state.name, state.monitor
     {:noreply, state}
   end
   def handle_info(_, state), do: {:noreply, state}
 
-  defp consume(route, channel, tag, body, headers, event_processor, redelivered?) do
+  defp consume(route, channel, tag, body, headers, event_processor, redelivered?, name, monitor) do
     ack     = fn -> Basic.ack(channel, tag, [])end
     nack    = fn -> Basic.reject(channel, tag, requeue: false) end
     retry   = fn -> Basic.reject(channel, tag, requeue: true) end
@@ -65,11 +72,12 @@ defmodule Extreme.System.RabbitMQ.Listener do
     else
       %{}
     end
-    _consume(route, body, headers, redelivered?, ack, nack, retry, event_processor)
+    _consume(route, body, headers, redelivered?, ack, nack, retry, event_processor, name, monitor)
   end
 
-  defp _consume(route, payload, headers, redelivered?, ack, nack, retry, event_processor) do
+  defp _consume(route, payload, headers, redelivered?, ack, nack, retry, event_processor, name, monitor) do
     Logger.metadata headers
+    :ok = ListenerMonitor.monitor(monitor, self(), name, retry)
     case event_processor.process(route, payload, [redelivered?: redelivered?, ack: ack, nack: nack, retry: retry, listener: self()]) do
       :ok             -> 
         Logger.debug fn -> "Acking message" end
