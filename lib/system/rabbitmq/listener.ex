@@ -65,7 +65,7 @@ defmodule Extreme.System.RabbitMQ.Listener do
   end
     
   def handle_info(msg, state) do
-    Logger.warn fn -> "Skip listener.handle_info/2 for #{inspect msg}"
+    Logger.warn fn -> "Skip listener.handle_info/2 for #{inspect msg}" end
     {:noreply, state}
   end
 
