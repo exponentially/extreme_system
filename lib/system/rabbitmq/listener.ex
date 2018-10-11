@@ -14,8 +14,10 @@ defmodule Extreme.System.RabbitMQ.Listener do
 
   def init({channel_manager, listener_monitor, listener_name, definition}) do
     chan                = ChannelManager.get_channel channel_manager, listener_name
+    true                = Process.link(chan)
     :ok                 = _set_queue chan, definition
     {:ok, consumer_tag} = Basic.consume(chan, definition.queue.name)
+
     {:ok, %{
       channel: chan,
       consumer_tag: consumer_tag,
@@ -61,7 +63,11 @@ defmodule Extreme.System.RabbitMQ.Listener do
     consume route, state.channel, tag, body, opts[:headers], state.processor, redelivered?, state.name, state.monitor
     {:noreply, state}
   end
-  def handle_info(_, state), do: {:noreply, state}
+    
+  def handle_info(msg, state) do
+    Logger.warn fn -> "Skip listener.handle_info/2 for #{inspect msg}"
+    {:noreply, state}
+  end
 
   defp consume(route, channel, tag, body, headers, event_processor, redelivered?, name, monitor) do
     ack     = fn -> Basic.ack(channel, tag, [])end
