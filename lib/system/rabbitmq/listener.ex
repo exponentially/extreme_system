@@ -14,7 +14,7 @@ defmodule Extreme.System.RabbitMQ.Listener do
 
   def init({channel_manager, listener_monitor, listener_name, definition}) do
     chan                = ChannelManager.get_channel channel_manager, listener_name
-    true                = Process.link(chan)
+    true                = Process.link(chan.pid)
     :ok                 = _set_queue chan, definition
     {:ok, consumer_tag} = Basic.consume(chan, definition.queue.name)
 
