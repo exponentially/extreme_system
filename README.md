@@ -6,7 +6,7 @@ Aggregates are loaded into memory on demand, meaning once the command is dispatc
 
 1. First, aggregates are created by using `Extreme.System.GenAggregate`. Here is an example of an aggregate:
 
-```
+```elixir
 defmodule ExtremeSystem.Example.Users.Aggregates.User do
   use     Extreme.System.GenAggregate
   alias   ExtremeSystem.Example.Events, as: Event
@@ -97,7 +97,7 @@ end
 
 2. Next, we need to register aggregates with a scheduler, ie. to associate an aggregate with an event stream name. We make use of `Extreme.System.CommandConfiguration`:
 
-```
+```elixir
 defmodule ExtremeSystem.Example.Users.CommandConfiguration do
   alias   ExtremeSystem.Example.Users.Aggregates
   use     Extreme.System.CommandConfiguration, aggregates: [{Aggregates.User,    "ex_users"},
@@ -107,7 +107,7 @@ end
 
 3. Next we need to create a message handler, that will dispatch commands to appropriate aggregates. For this we use `Extreme.System.MessageHandler`. To send a message to an existing aggregate we use `with_aggregate`, while to send a message to a new aggregate (e.g. creation) we use `with_new_aggregate`. The former assumes there is at least one event persisted in EventStore that is related to your aggregate otherwise you will receive an error:
 
-```
+```elixir
 defmodule ExtremeSystem.Example.MessageHandlers.Users do
   alias   ExtremeSystem.Example.Users,   as: App
   use     Extreme.System.MessageHandler, prefix:        App,
@@ -130,7 +130,7 @@ end
 
 4. To route a message to appropriate message handler, we need to use `Extreme.System.Facade`:
 
-```
+```elixir
 defmodule ExtremeSystem.Example.Users.Facade do
   use     Extreme.System.Facade, default_cache: 1_000
 
@@ -143,7 +143,7 @@ end
 
 5. We can then register this facade globally:
 
-```
+```elixir
 defmodule ExtremeSystem.Example.Users do
   alias   ExtremeSystem.Example.Users, as: App
   alias   Extreme.System,              as: ExSys
@@ -166,7 +166,7 @@ end
 
 6. And then call when we need it:
 
-```
+```elixir
 res = :global.whereis_name(facade)
 GenServer.call(res, command, timeout: 2_000)
 ```
