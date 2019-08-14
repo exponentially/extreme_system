@@ -1,19 +1,23 @@
 defmodule Extreme.System.CommandConfiguration do
   defmacro __using__(opts) do
     quote do
-      use     Supervisor
+      use Supervisor
       require Logger
-      
+
       def stream_for(), do: unquote(opts[:aggregates])
 
       def start_link(prefix),
-        do: Supervisor.start_link __MODULE__, prefix, name: Extreme.System.CommandConfiguration.name(prefix)
-
+        do:
+          Supervisor.start_link(__MODULE__, prefix,
+            name: Extreme.System.CommandConfiguration.name(prefix)
+          )
 
       def init(prefix) do
-        children = unquote(Keyword.fetch! opts, :aggregates) 
-                    |> Enum.map(fn item -> aggregate_group(item, prefix) end)
-        supervise children, strategy: :one_for_one
+        children =
+          unquote(Keyword.fetch!(opts, :aggregates))
+          |> Enum.map(fn item -> aggregate_group(item, prefix) end)
+
+        supervise(children, strategy: :one_for_one)
       end
 
       defp aggregate_group({aggr_mod, _stream}, prefix) do
@@ -24,5 +28,5 @@ defmodule Extreme.System.CommandConfiguration do
   end
 
   def name(prefix),
-    do: "#{prefix |> to_string()}.CommandConfiguration" |> String.to_atom
+    do: "#{prefix |> to_string()}.CommandConfiguration" |> String.to_atom()
 end

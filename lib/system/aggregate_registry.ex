@@ -6,14 +6,14 @@ defmodule Extreme.System.AggregateRegistry do
   require Logger
   use GenServer
 
-  def name(aggregate_mod), do: "#{aggregate_mod}.PidRegistry"  |> String.to_atom
+  def name(aggregate_mod), do: "#{aggregate_mod}.PidRegistry" |> String.to_atom()
 
   ## Client API
 
   @doc """
   Starts process registry
   """
-  def start_link(name), 
+  def start_link(name),
     do: GenServer.start_link(__MODULE__, name, name: name)
 
   @doc """
@@ -26,26 +26,24 @@ defmodule Extreme.System.AggregateRegistry do
 
   Returns `{:ok, pid}` if the one exists, `:error` otherwise.
   """
-  def get(server, key), 
+  def get(server, key),
     do: server |> pid_table |> _get(key)
-
-
 
   @doc """
   Ensures there is a `pid` associated with `key` in `server`.
 
   Returns :ok once when process is successfully registered
   """
-  def register(server, key, pid), 
+  def register(server, key, pid),
     do: GenServer.call(server, {:register, key, pid})
-
 
   ## Server Callbacks
 
-  def init(name) do 
+  def init(name) do
     name
     |> pid_table
     |> :ets.new([:named_table, read_concurrency: true])
+
     name
     |> ref_table
     |> :ets.new([:named_table, read_concurrency: true])
@@ -58,13 +56,12 @@ defmodule Extreme.System.AggregateRegistry do
   defp _get(table, key) do
     case :ets.lookup(table, key) do
       [{^key, val}] -> {:ok, val}
-      []            -> :error
+      [] -> :error
     end
   end
 
-  defp pid_table(name), do: "#{name}.Pids" |> String.to_atom
-  defp ref_table(name), do: "#{name}.Refs" |> String.to_atom
-
+  defp pid_table(name), do: "#{name}.Pids" |> String.to_atom()
+  defp ref_table(name), do: "#{name}.Refs" |> String.to_atom()
 
   def handle_call({:has_key?, key}, _from, state) do
     {:reply, Map.has_key?(state.processes, key), state}
@@ -75,25 +72,31 @@ defmodule Extreme.System.AggregateRegistry do
   end
 
   def handle_call({:register, key, pid}, _from, state) do
-    result = case _get(state.pid_table, key) do
-      {:ok, pid} -> {:error, :key_already_registered, pid}
-      :error     ->
-        ref   = Process.monitor pid
-        true = :ets.insert state.pid_table, {key, pid}
-        true = :ets.insert state.ref_table, {ref, key}
-        :ok
-    end
+    result =
+      case _get(state.pid_table, key) do
+        {:ok, pid} ->
+          {:error, :key_already_registered, pid}
+
+        :error ->
+          ref = Process.monitor(pid)
+          true = :ets.insert(state.pid_table, {key, pid})
+          true = :ets.insert(state.ref_table, {ref, key})
+          :ok
+      end
+
     {:reply, result, state}
   end
 
   def handle_info({:DOWN, ref, :process, pid, reason}, state) do
     case _get(state.ref_table, ref) do
       {:ok, key} ->
-        Logger.warn "Process #{inspect pid} went down: #{inspect reason}"
-        :ets.delete state.ref_table, ref
-        :ets.delete state.pid_table, key
+        Logger.warn("Process #{inspect(pid)} went down: #{inspect(reason)}")
+        :ets.delete(state.ref_table, ref)
+        :ets.delete(state.pid_table, key)
     end
+
     {:noreply, state}
   end
+
   def handle_info(_msg, state), do: {:noreply, state}
 end
