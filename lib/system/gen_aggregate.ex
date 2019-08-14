@@ -58,9 +58,11 @@ defmodule Extreme.System.GenAggregate do
 
   defmacro handle_cmd(cmd, params, metadata, fun, timeout \\ 5_000) do
     quote do
+      @x3m_cmd [{unquote(cmd), 3}]
       def unquote(cmd)(server, unquote(params), unquote(metadata) \\ []),
         do: exec server, {unquote(cmd), unquote(params), unquote(metadata)}, unquote(timeout)
     
+      @doc false
       def handle_exec({unquote(cmd), unquote(params), unquote(metadata)}, from, state) do
         Logger.metadata unquote(metadata)
         Logger.info  fn -> "Executing #{inspect unquote(cmd)} on #{inspect Map.get(state, :id) || __MODULE__} with params" end
@@ -73,9 +75,11 @@ defmodule Extreme.System.GenAggregate do
   end
   defmacro handle_cmd(cmd, fun, timeout \\ 5_000) do
     quote do
+      @x3m_cmd [{unquote(cmd), 1}]
       def unquote(cmd)(server),
         do: exec server, unquote(cmd), unquote(timeout)
     
+      @doc false
       def handle_exec(unquote(cmd), from, state) do
         Logger.metadata []
         Logger.info fn -> "Executing #{inspect unquote(cmd)} on #{inspect Map.get(state, :id) || __MODULE__} without params" end
@@ -93,12 +97,26 @@ defmodule Extreme.System.GenAggregate do
       require Extreme.System.GenAggregate
       require Logger
 
+      Module.register_attribute __MODULE__,
+        :x3m_cmd,
+        accumulate: true, persist: true
+
       defp initial_state(ttl \\ 2_000),
         do: %{buffer: [], ttl: ttl, events: [], version: -1}
+
+      @doc """
+      Returns list of command functions with their arrity.
+      """
+      def get_commands do
+        __MODULE__.__info__(:attributes)
+        |> Keyword.get_values(:x3m_cmd)
+        |> List.flatten
+      end
 
       def commit(pid, transaction, expected_version, new_version), 
         do: GenServer.call(pid, {:commit, transaction, expected_version, new_version})
 
+      @doc false
       def exec(pid, cmd, timeout \\ 5_000), 
         do: GenServer.call(pid, {:cmd, cmd}, timeout)
 
@@ -185,7 +203,7 @@ defmodule Extreme.System.GenAggregate do
       end
       defp _respond({:block, from, {:events, events}, state}, _) 
         when is_list(events) do
-          schedule_rollback state.transaction, state.ttl
+          _schedule_rollback state.transaction, state.ttl
           GenServer.reply from, {:ok, state.transaction, events, state.version, :default}
           {:noreply, %{state | events: events}}
       end
@@ -204,13 +222,13 @@ defmodule Extreme.System.GenAggregate do
       end
       defp _respond({:block, from, {:events, events, response}, state}, _) 
         when is_list(events) do
-          schedule_rollback state.transaction, state.ttl
+          _schedule_rollback state.transaction, state.ttl
           GenServer.reply from, {:ok, state.transaction, events, state.version, response}
           {:noreply, %{state | events: events}}
       end
 
       defp _respond({:block, from, response, state}, _) do
-        schedule_rollback state.transaction, state.ttl
+        _schedule_rollback state.transaction, state.ttl
         Logger.debug fn -> "WTH is response: #{inspect response}" end
         GenServer.reply from, response
         {:noreply, state}
@@ -228,7 +246,7 @@ defmodule Extreme.System.GenAggregate do
       def handle_info(_, state), 
         do: {:noreply, state}
 
-      defp schedule_rollback(transaction, ttl),
+      defp _schedule_rollback(transaction, ttl),
         do: {:ok, _ref} = :timer.send_after ttl, self(), {:rollback, transaction}
 
       defp _ok(from, state),
