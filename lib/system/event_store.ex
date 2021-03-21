@@ -61,7 +61,7 @@ defmodule Extreme.System.EventStore do
         {:reply, events, state}
       end
 
-      defp get_stream_events(extreme, stream, start_at, per_page \\ 4096) do
+      defp get_stream_events(extreme, stream, start_at, per_page \\ 512) do
         Stream.resource(
         fn -> fetch_stream_events({extreme, stream, start_at, per_page, false}) end,
         &return_stream_events/1,
